@@ -1,0 +1,12 @@
+<Project>
+  <ItemGroup>
+    <!-- This repo lives on an exFAT volume; macOS writes AppleDouble "._"
+         sidecar files alongside every real file. Exclude them from every
+         project's default compile/content globs so they are never treated
+         as source. -->
+    <Compile Remove="**/._*" />
+    <Content Remove="**/._*" />
+    <None Remove="**/._*" />
+    <EmbeddedResource Remove="**/._*" />
+  </ItemGroup>
+</Project>

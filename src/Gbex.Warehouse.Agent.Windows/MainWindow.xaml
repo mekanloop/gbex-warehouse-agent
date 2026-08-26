@@ -1,0 +1,82 @@
+<Window x:Class="Gbex.Warehouse.Agent.Windows.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GBEX Depo Ajanı" Height="520" Width="720" WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock Text="GBEX Depo Ajanı" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding AgentVersion, StringFormat=' v{0}'}" FontSize="14" Foreground="Gray" VerticalAlignment="Bottom" Margin="8,0,0,0" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="0,0,4,0">
+                <StackPanel>
+                    <TextBlock Text="GBEX Bağlantısı" FontWeight="Bold" />
+                    <TextBlock Text="{Binding StationStatusText}" />
+                    <TextBlock Text="{Binding LastHeartbeatAt, StringFormat='Son nabız: {0:HH:mm:ss}'}" FontSize="11" Foreground="Gray" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,4,0">
+                <StackPanel>
+                    <TextBlock Text="İş Akışı Durumu" FontWeight="Bold" />
+                    <TextBlock Text="{Binding WorkflowStatusText}" FontSize="14" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Çevrimdışı Kuyruk" FontWeight="Bold" />
+                    <TextBlock Text="{Binding OfflineQueueCount}" FontSize="18" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="Barkod:" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBox x:Name="ScanTextBox" Width="300" FontSize="16" Text="{Binding ScanInput, UpdateSourceTrigger=PropertyChanged}"
+                     KeyDown="ScanTextBox_KeyDown" />
+        </StackPanel>
+
+        <Grid Grid.Row="3" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" BorderBrush="LightGray" BorderThickness="1" Padding="8" Margin="0,0,4,0">
+                <StackPanel>
+                    <TextBlock Text="Beyan Edilen" FontWeight="Bold" />
+                    <TextBlock Text="{Binding CurrentOrder.DeclaredWeight, StringFormat='Ağırlık: {0} kg'}" />
+                    <TextBlock Text="{Binding CurrentOrder.DeclaredLength, StringFormat='Uzunluk: {0} cm'}" />
+                    <TextBlock Text="{Binding CurrentOrder.DeclaredWidth, StringFormat='Genişlik: {0} cm'}" />
+                    <TextBlock Text="{Binding CurrentOrder.DeclaredHeight, StringFormat='Yükseklik: {0} cm'}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" BorderBrush="LightGray" BorderThickness="1" Padding="8" Margin="4,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Son Ölçüm Sonucu" FontWeight="Bold" />
+                    <TextBlock Text="{Binding LastMeasurementSummary}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="4" TextWrapping="Wrap" Foreground="Gray" VerticalAlignment="Top"
+                   Text="Barkodu okutup Enter'a basın. Fiyatlandırma, onay, cüzdan ve gönderi değişimi işlemleri web yönetim panelinde yapılır." />
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="İstasyon Ayarları" Padding="8,4" Click="StationSettings_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

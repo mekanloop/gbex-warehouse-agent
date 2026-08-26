@@ -1,0 +1,28 @@
+<Window x:Class="Gbex.Warehouse.Agent.Windows.StationSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="İstasyon Ayarları" Height="420" Width="480" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <StackPanel Margin="16">
+        <TextBlock Text="GBEX API Adresi" FontWeight="Bold" />
+        <TextBox x:Name="GbexBaseUrlBox" Margin="0,4,0,12" />
+
+        <TextBlock Text="EasyCube Cihaz Adresi (yerel ağ)" FontWeight="Bold" />
+        <TextBox x:Name="EasyCubeBaseUrlBox" Margin="0,4,0,12" />
+
+        <TextBlock Text="Cihaz Kimliği (opsiyonel)" FontWeight="Bold" />
+        <TextBox x:Name="DeviceIdBox" Margin="0,4,0,12" />
+
+        <TextBlock x:Name="SecretStatusText" FontWeight="Bold" Margin="0,0,0,4" />
+        <TextBlock Text="Tek kullanımlık istasyon anahtarı (yalnızca ilk kurulumda görünür):" TextWrapping="Wrap" Margin="0,0,0,4" />
+        <PasswordBox x:Name="StationSecretBox" Margin="0,0,0,12" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="Bağlantıyı Test Et" Padding="8,4" Margin="0,0,8,0" Click="TestConnection_Click" />
+            <Button Content="Kimlik Bilgisini Kaldır" Padding="8,4" Margin="0,0,8,0" Click="RemoveCredential_Click" />
+            <Button Content="Kaydet" Padding="8,4" Margin="0,0,8,0" Click="Save_Click" />
+            <Button Content="Kapat" Padding="8,4" Click="Close_Click" />
+        </StackPanel>
+
+        <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" />
+    </StackPanel>
+</Window>

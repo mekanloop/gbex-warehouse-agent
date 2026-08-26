@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-publish:
+    # Windows runner — required to compile and publish the WPF project.
+    # Everything (Core, Infrastructure, simulator, both test projects, AND
+    # the Windows/WPF app) builds and runs here in one job, since only a
+    # Windows runner can do all of it.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore Gbex.Warehouse.Agent.sln
+
+      - name: Format check
+        run: dotnet format Gbex.Warehouse.Agent.sln --verify-no-changes --severity warn
+        continue-on-error: true # style-only; never blocks the build
+
+      - name: Build (all projects, Release)
+        run: dotnet build Gbex.Warehouse.Agent.sln --configuration Release --no-restore
+
+      - name: Unit tests (Core)
+        run: dotnet test tests/Gbex.Warehouse.Agent.Core.Tests/Gbex.Warehouse.Agent.Core.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
+
+      - name: Integration tests (simulator end-to-end)
+        run: dotnet test tests/Gbex.Warehouse.Agent.IntegrationTests/Gbex.Warehouse.Agent.IntegrationTests.csproj --configuration Release --no-build --logger "trx;LogFileName=integration-tests.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/*.trx
+
+      - name: Publish self-contained win-x64 artifact
+        run: >
+          dotnet publish src/Gbex.Warehouse.Agent.Windows/Gbex.Warehouse.Agent.Windows.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=false
+          --output publish/GbexWarehouseAgent
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GbexWarehouseAgent-win-x64
+          path: publish/GbexWarehouseAgent/**
+          if-no-files-found: error
