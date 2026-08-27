@@ -65,18 +65,22 @@ public partial class App : Application
 
         // GbexApiClient's own constructor sets BaseAddress/Timeout from
         // GbexApiOptions — no HttpClient configuration needed here.
+        // GbexApiOptions/EasyCubeOptions use init-only properties (by
+        // design — they're meant to be constructed once, not mutated), so
+        // they're built directly here rather than via Configure<T>(Action<T>),
+        // which requires a mutable target.
         builder.Services.AddHttpClient<IGbexApiClient, GbexApiClient>();
-        builder.Services.Configure<GbexApiOptions>(o =>
+        builder.Services.AddSingleton(Options.Create(new GbexApiOptions
         {
-            o.BaseUrl = string.IsNullOrWhiteSpace(settings.GbexApiBaseUrl) ? "https://app.gbex.com.tr" : settings.GbexApiBaseUrl;
-            o.AllowInsecureForDevelopment = settings.AllowInsecureGbexForDevelopment;
-        });
+            BaseUrl = string.IsNullOrWhiteSpace(settings.GbexApiBaseUrl) ? "https://app.gbex.com.tr" : settings.GbexApiBaseUrl,
+            AllowInsecureForDevelopment = settings.AllowInsecureGbexForDevelopment,
+        }));
 
         builder.Services.AddHttpClient<IEasyCubeClient, EasyCubeClient>();
-        builder.Services.Configure<EasyCubeOptions>(o =>
+        builder.Services.AddSingleton(Options.Create(new EasyCubeOptions
         {
-            o.BaseUrl = string.IsNullOrWhiteSpace(settings.EasyCubeBaseUrl) ? "http://localhost:8080" : settings.EasyCubeBaseUrl;
-        });
+            BaseUrl = string.IsNullOrWhiteSpace(settings.EasyCubeBaseUrl) ? "http://localhost:8080" : settings.EasyCubeBaseUrl,
+        }));
 
         builder.Services.AddSingleton(sp => new WarehouseWorkflowEngine(
             sp.GetRequiredService<IGbexApiClient>(),

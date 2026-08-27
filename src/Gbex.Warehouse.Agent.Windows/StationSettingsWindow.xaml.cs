@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Windows;
 using Gbex.Warehouse.Agent.Core.Abstractions;
 using Gbex.Warehouse.Agent.Infrastructure.Gbex;
