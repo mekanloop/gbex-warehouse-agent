@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Gbex.Warehouse.Agent.Core.Abstractions;
+using Gbex.Warehouse.Agent.Core.Evidence;
 using Microsoft.Extensions.Logging;
 
 namespace Gbex.Warehouse.Agent.Infrastructure.Evidence;
@@ -36,7 +37,7 @@ public sealed class TemporaryImageStore : IEvidenceImageStore
             throw new InvalidOperationException($"Evidence image size {imageBytes.Length} bytes is outside the allowed range (1..{MaxImageBytes}).");
         }
 
-        var sniffed = SniffImageType(imageBytes);
+        var sniffed = ImageFormatSniffer.Sniff(imageBytes);
         if (sniffed is null || !string.Equals(sniffed, mimeType, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Evidence image content does not match its declared type or is not a recognized format.");
@@ -97,17 +98,6 @@ public sealed class TemporaryImageStore : IEvidenceImageStore
             }
         }
         return Task.FromResult(purged);
-    }
-
-    private static string? SniffImageType(byte[] bytes)
-    {
-        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return "image/jpeg";
-        if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
-            && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A) return "image/png";
-        if (bytes.Length >= 12
-            && bytes[0] == (byte)'R' && bytes[1] == (byte)'I' && bytes[2] == (byte)'F' && bytes[3] == (byte)'F'
-            && bytes[8] == (byte)'W' && bytes[9] == (byte)'E' && bytes[10] == (byte)'B' && bytes[11] == (byte)'P') return "image/webp";
-        return null;
     }
 
     private void TryRestrictDirectoryPermissions()

@@ -11,6 +11,18 @@ namespace Gbex.Warehouse.Agent.Core.Tests;
 
 public class WarehouseWorkflowEngineTests
 {
+    // Minimal real JPEG signature (SOI marker) — ImageFormatSniffer now
+    // rejects arbitrary bytes that don't match a recognized image format
+    // (see TemporaryImageStore/ImageFormatSniffer), so fake evidence bytes
+    // in these tests must actually look like an image.
+    private static readonly byte[] FakeJpegBytes = { 0xFF, 0xD8, 0xFF };
+    // PNG signature — a real EasyCube unit (2026-08-27) was found to send
+    // PNG image data despite the Agent always declaring "image/jpeg", which
+    // silently lost every mismatch's evidence photo. The mimeType passed to
+    // the image store and to the GBEX upload must be sniffed from the real
+    // bytes, not assumed.
+    private static readonly byte[] FakePngBytes = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+
     /// <summary>
     /// Always returns the REAL current time — these tests aren't exercising
     /// staleness rejection (MeasurementCorrelationValidatorTests owns that),
@@ -114,7 +126,7 @@ public class WarehouseWorkflowEngineTests
     {
         var fx = new Fixture();
         fx.EasyCubeClient.Setup(c => c.CaptureMeasurementAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(new byte[] { 1, 2, 3 }))));
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
         fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("temp/handle.jpg");
         fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -134,11 +146,11 @@ public class WarehouseWorkflowEngineTests
     {
         var fx = new Fixture();
         fx.EasyCubeClient.Setup(c => c.CaptureMeasurementAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(new byte[] { 1, 2, 3 }))));
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
         fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("temp/handle.jpg");
         fx.ImageStore.Setup(s => s.ReadAsync("temp/handle.jpg", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new byte[] { 1, 2, 3 });
+            .ReturnsAsync(FakeJpegBytes);
         fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m2", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
         fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m2", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -158,11 +170,11 @@ public class WarehouseWorkflowEngineTests
     {
         var fx = new Fixture();
         fx.EasyCubeClient.Setup(c => c.CaptureMeasurementAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(new byte[] { 1, 2, 3 }))));
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
         fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("temp/handle.jpg");
         fx.ImageStore.Setup(s => s.ReadAsync("temp/handle.jpg", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new byte[] { 1, 2, 3 });
+            .ReturnsAsync(FakeJpegBytes);
         fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m3", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
         fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m3", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -333,11 +345,11 @@ public class WarehouseWorkflowEngineTests
         // limitation) — the fallback client is what supplies one, keyed by
         // the same PackageNumber the push reported.
         fx.EasyCubeClient.Setup(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(new byte[] { 9, 9, 9 }))));
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
         fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("temp/fallback-fetched.jpg");
         fx.ImageStore.Setup(s => s.ReadAsync("temp/fallback-fetched.jpg", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new byte[] { 9, 9, 9 });
+            .ReturnsAsync(FakeJpegBytes);
         fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m-photo-1", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(EvidenceUploadOutcome.Ok("https://example/photo.jpg"));
 
@@ -348,6 +360,32 @@ public class WarehouseWorkflowEngineTests
         var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
         Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
         fx.EasyCubeClient.Verify(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_mismatch_uploads_a_PNG_evidence_photo_with_the_correct_sniffed_mime_type()
+    {
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-photo-png", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
+        fx.EasyCubeClient.Setup(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakePngBytes))));
+        fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), "image/png", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("temp/fallback-fetched.png");
+        fx.ImageStore.Setup(s => s.ReadAsync("temp/fallback-fetched.png", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FakePngBytes);
+        fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m-photo-png", It.IsAny<byte[]>(), "image/png", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EvidenceUploadOutcome.Ok("https://example/photo.png"));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
+        fx.GbexClient.Verify(c => c.UploadEvidenceAsync("m-photo-png", It.IsAny<byte[]>(), "image/png", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

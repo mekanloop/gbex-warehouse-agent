@@ -3,6 +3,7 @@ using Gbex.Warehouse.Agent.Core.Abstractions;
 using Gbex.Warehouse.Agent.Core.Barcode;
 using Gbex.Warehouse.Agent.Core.Correlation;
 using Gbex.Warehouse.Agent.Core.EasyCube;
+using Gbex.Warehouse.Agent.Core.Evidence;
 using Gbex.Warehouse.Agent.Core.Idempotency;
 using Gbex.Warehouse.Agent.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -211,13 +212,14 @@ public sealed class WarehouseWorkflowEngine
         if (!string.IsNullOrEmpty(measurement.ImageBase64))
         {
             var bytes = EasyCubeImageDecoder.TryDecode(measurement.ImageBase64);
-            if (bytes is not null)
+            var mimeType = bytes is not null ? ImageFormatSniffer.Sniff(bytes) : null;
+            if (bytes is not null && mimeType is not null)
             {
-                imageHandle = await _imageStore.SaveTemporaryAsync(bytes, "image/jpeg", ct);
+                imageHandle = await _imageStore.SaveTemporaryAsync(bytes, mimeType, ct);
             }
             else
             {
-                _logger.LogWarning("EasyCube returned an undecodable image payload for package {PackageNumber} — continuing without evidence image", measurement.PackageNumber);
+                _logger.LogWarning("EasyCube returned an undecodable or unrecognized-format image payload for package {PackageNumber} — continuing without evidence image", measurement.PackageNumber);
             }
         }
 
@@ -327,7 +329,8 @@ public sealed class WarehouseWorkflowEngine
             try
             {
                 var bytes = await _imageStore.ReadAsync(imageHandle, ct);
-                var uploadResult = await _gbexClient.UploadEvidenceAsync(result.MeasurementId, bytes, "image/jpeg", evidenceKey, ct);
+                var mimeType = ImageFormatSniffer.Sniff(bytes) ?? "image/jpeg";
+                var uploadResult = await _gbexClient.UploadEvidenceAsync(result.MeasurementId, bytes, mimeType, evidenceKey, ct);
                 if (uploadResult is EvidenceUploadOutcome)
                 {
                     await _imageStore.DeleteAsync(imageHandle, ct);
@@ -384,8 +387,16 @@ public sealed class WarehouseWorkflowEngine
                 return null;
             }
 
-            _logger.LogInformation("EasyCube /alibi/{PackageNumber} image decoded successfully, {Bytes} bytes", packageNumber, bytes.Length);
-            return await _imageStore.SaveTemporaryAsync(bytes, "image/jpeg", ct);
+            var mimeType = ImageFormatSniffer.Sniff(bytes);
+            if (mimeType is null)
+            {
+                _logger.LogWarning("EasyCube /alibi/{PackageNumber} image decoded to {Bytes} bytes but the content is not a recognized image format (first bytes: {Prefix})",
+                    packageNumber, bytes.Length, Convert.ToHexString(bytes[..Math.Min(8, bytes.Length)]));
+                return null;
+            }
+
+            _logger.LogInformation("EasyCube /alibi/{PackageNumber} image decoded successfully, {Bytes} bytes, format {MimeType}", packageNumber, bytes.Length, mimeType);
+            return await _imageStore.SaveTemporaryAsync(bytes, mimeType, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
