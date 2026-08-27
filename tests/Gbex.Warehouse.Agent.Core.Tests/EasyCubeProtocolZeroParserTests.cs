@@ -161,4 +161,37 @@ public class EasyCubeProtocolZeroParserTests
 
         Assert.IsType<EasyCubeFrameParseResult.Malformed>(result);
     }
+
+    // Confirmed on real hardware (2026-08-27, ImgAutoSend enabled) that the
+    // device pushes this as its own separate frame, per the guide's "Get a
+    // measured image" command: {I,S,<image-scale>,ID,<Image-Base64-Format>}.
+    [Fact]
+    public void TryParse_reads_a_separate_image_frame()
+    {
+        var result = EasyCubeProtocolZeroParser.TryParse("I,S,25,ID,aGVsbG8=");
+
+        var imageOk = Assert.IsType<EasyCubeFrameParseResult.ImageOk>(result);
+        Assert.Equal("aGVsbG8=", imageOk.Base64);
+    }
+
+    [Fact]
+    public void TryParse_rejects_an_image_frame_missing_the_ID_field()
+    {
+        var result = EasyCubeProtocolZeroParser.TryParse("I,S,25");
+
+        Assert.IsType<EasyCubeFrameParseResult.Malformed>(result);
+    }
+
+    [Fact]
+    public void ExtractFrames_splits_a_measurement_frame_and_a_trailing_image_frame_pushed_back_to_back()
+    {
+        var buffer = RealExampleFrame + "{I,S,25,ID,aGVsbG8=}";
+
+        var (frames, remainder) = EasyCubeProtocolZeroParser.ExtractFrames(buffer);
+
+        Assert.Equal(2, frames.Count);
+        Assert.Equal("", remainder);
+        Assert.IsType<EasyCubeFrameParseResult.Ok>(EasyCubeProtocolZeroParser.TryParse(frames[0]));
+        Assert.IsType<EasyCubeFrameParseResult.ImageOk>(EasyCubeProtocolZeroParser.TryParse(frames[1]));
+    }
 }

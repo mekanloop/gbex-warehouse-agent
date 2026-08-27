@@ -308,6 +308,10 @@ public sealed class WarehouseWorkflowEngine
         // flow, not just the keyboard-wedge fallback — it fails silently
         // (Unavailable) if the HTTP address isn't configured or the device
         // doesn't answer, never blocking the mismatch result itself.
+        _logger.LogInformation(
+            "Mismatch evidence check for measurement {MeasurementId}: RequiresEvidence={RequiresEvidence}, hadImageFromDevicePush={HadDirectImage}, packageNumber='{PackageNumber}'",
+            result.MeasurementId, result.RequiresEvidence, imageHandle is not null, submission.PackageNumber);
+
         if (result.RequiresEvidence && imageHandle is null && !string.IsNullOrWhiteSpace(submission.PackageNumber))
         {
             imageHandle = await TryFetchEvidenceImageAsync(submission.PackageNumber, ct);
@@ -357,18 +361,30 @@ public sealed class WarehouseWorkflowEngine
         try
         {
             var capture = await _easyCubeClient.GetByPackageNumberAsync(packageNumber, ct);
-            if (capture is not MeasurementOutcome outcome || string.IsNullOrEmpty(outcome.Measurement?.ImageBase64))
+
+            if (capture is not MeasurementOutcome outcome)
             {
+                _logger.LogWarning("EasyCube /alibi/{PackageNumber} did not return a measurement: {ResultType}", packageNumber, capture.GetType().Name);
                 return null;
             }
+
+            if (string.IsNullOrEmpty(outcome.Measurement?.ImageBase64))
+            {
+                _logger.LogWarning("EasyCube /alibi/{PackageNumber} returned a measurement with no ImageBase64 field (null or empty)", packageNumber);
+                return null;
+            }
+
+            _logger.LogInformation("EasyCube /alibi/{PackageNumber} returned ImageBase64 of length {Length}", packageNumber, outcome.Measurement.ImageBase64.Length);
 
             var bytes = EasyCubeImageDecoder.TryDecode(outcome.Measurement.ImageBase64);
             if (bytes is null)
             {
-                _logger.LogWarning("EasyCube's /alibi response for package {PackageNumber} carried an undecodable image payload", packageNumber);
+                _logger.LogWarning("EasyCube's /alibi response for package {PackageNumber} carried an undecodable image payload (first 40 chars: '{Prefix}')",
+                    packageNumber, outcome.Measurement.ImageBase64[..Math.Min(40, outcome.Measurement.ImageBase64.Length)]);
                 return null;
             }
 
+            _logger.LogInformation("EasyCube /alibi/{PackageNumber} image decoded successfully, {Bytes} bytes", packageNumber, bytes.Length);
             return await _imageStore.SaveTemporaryAsync(bytes, "image/jpeg", ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

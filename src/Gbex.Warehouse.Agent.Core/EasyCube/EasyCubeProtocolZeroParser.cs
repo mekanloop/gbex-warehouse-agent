@@ -32,6 +32,17 @@ public sealed record EasyCubeProtocolRecord
 public abstract record EasyCubeFrameParseResult
 {
     public sealed record Ok(EasyCubeProtocolRecord Record) : EasyCubeFrameParseResult;
+    /// <summary>
+    /// A separate "I" frame — the guide's "Get a measured image" command
+    /// response, {I,S,&lt;image-scale&gt;,ID,&lt;Image-Base64-Format&gt;}. Confirmed
+    /// on real hardware (2026-08-27) that once the device's /tcps_config
+    /// "ImgAutoSend" flag is turned on, this frame is pushed unsolicited
+    /// alongside the MFR data frame — as its own separate "{...}" frame, not
+    /// a field embedded in MFR. It carries no package number, so it cannot
+    /// be correlated to a specific MFR frame by content — only by arrival
+    /// order (see EasyCubeTcpListener).
+    /// </summary>
+    public sealed record ImageOk(string Base64) : EasyCubeFrameParseResult;
     public sealed record Malformed(string Detail) : EasyCubeFrameParseResult;
 }
 
@@ -113,9 +124,20 @@ public static class EasyCubeProtocolZeroParser
     public static EasyCubeFrameParseResult TryParse(string frameContent)
     {
         var tokens = frameContent.Split(',');
-        if (tokens.Length == 0 || !RecordTags.Contains(tokens[0].Trim()))
+        if (tokens.Length == 0)
         {
-            return new EasyCubeFrameParseResult.Malformed($"unrecognized frame tag '{(tokens.Length > 0 ? tokens[0].Trim() : "")}'");
+            return new EasyCubeFrameParseResult.Malformed("empty frame");
+        }
+
+        var tag = tokens[0].Trim();
+        if (string.Equals(tag, "I", StringComparison.OrdinalIgnoreCase))
+        {
+            return TryParseImageFrame(tokens);
+        }
+
+        if (!RecordTags.Contains(tag))
+        {
+            return new EasyCubeFrameParseResult.Malformed($"unrecognized frame tag '{tag}'");
         }
 
         if ((tokens.Length - 1) % 2 != 0)
@@ -177,6 +199,32 @@ public static class EasyCubeProtocolZeroParser
             DimensionalWeightUnit = dwtUnit,
             Barcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode,
         });
+    }
+
+    private static EasyCubeFrameParseResult TryParseImageFrame(string[] tokens)
+    {
+        // {I,S,<image-scale>,ID,<Image-Base64-Format>} — same flat
+        // key,value,key,value shape as the measurement frames, but the
+        // guide's own worked example literally shows the tag "ID" holding
+        // the base64 DATA (not a format name) — see the example response
+        // "{I,S,25,ID,<Image-Base64-Data>}" — so this reads it as such.
+        if ((tokens.Length - 1) % 2 != 0)
+        {
+            return new EasyCubeFrameParseResult.Malformed("odd number of key/value tokens in image frame");
+        }
+
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 1; i < tokens.Length; i += 2)
+        {
+            fields[tokens[i].Trim()] = tokens[i + 1].Trim();
+        }
+
+        if (!fields.TryGetValue("ID", out var base64) || string.IsNullOrWhiteSpace(base64))
+        {
+            return new EasyCubeFrameParseResult.Malformed("missing ID (image base64 data) in image frame");
+        }
+
+        return new EasyCubeFrameParseResult.ImageOk(base64);
     }
 
     private static bool TryParseRequiredDecimal(Dictionary<string, string> fields, string key, out decimal value, out string? error)

@@ -35,6 +35,21 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
     private readonly ILogger<EasyCubeTcpListener> _logger;
     private readonly Random _random = new();
 
+    /// <summary>
+    /// The device's "I" (image) frame carries no package number, so it
+    /// cannot be matched to a specific MFR frame by content — only by
+    /// arrival order. Confirmed on real hardware (2026-08-27, ImgAutoSend
+    /// enabled) that it is pushed as its own separate frame. This holds the
+    /// most recently received image until the next measurement frame
+    /// consumes it, as long as that happens within ImageCorrelationWindow —
+    /// covers the (camera-finishes-before-sensor) ordering; if the image
+    /// instead arrives AFTER its measurement frame, this TCP path leaves
+    /// ImageBase64 null and WarehouseWorkflowEngine's HTTP /alibi fallback
+    /// (TryFetchEvidenceImageAsync) still covers evidence on mismatch.
+    /// </summary>
+    private static readonly TimeSpan ImageCorrelationWindow = TimeSpan.FromSeconds(3);
+    private (string Base64, DateTimeOffset ReceivedAt)? _pendingImage;
+
     public EasyCubeConnectionState State { get; private set; } = EasyCubeConnectionState.Disconnected;
     public event Action<EasyCubeConnectionState>? StateChanged;
     public event Func<CapturedMeasurement, CancellationToken, Task>? MeasurementReceived;
@@ -124,12 +139,26 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
     private async Task HandleFrameAsync(string frame, CancellationToken ct)
     {
         var parsed = EasyCubeProtocolZeroParser.TryParse(frame);
+
+        if (parsed is EasyCubeFrameParseResult.ImageOk imageOk)
+        {
+            _pendingImage = (imageOk.Base64, DateTimeOffset.UtcNow);
+            return;
+        }
+
         if (parsed is not EasyCubeFrameParseResult.Ok ok)
         {
             var detail = parsed is EasyCubeFrameParseResult.Malformed malformed ? malformed.Detail : "unknown";
             _logger.LogWarning("Discarding malformed EasyCube TCP frame: {Detail}", detail);
             return;
         }
+
+        string? imageBase64 = null;
+        if (_pendingImage is (var pendingBase64, var receivedAt) && DateTimeOffset.UtcNow - receivedAt <= ImageCorrelationWindow)
+        {
+            imageBase64 = pendingBase64;
+        }
+        _pendingImage = null;
 
         var record = ok.Record;
 
@@ -162,6 +191,7 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
             HeightCm = heightOk.Value,
             DimensionalWeightKg = dimWeightKg,
             DeviceReportedBarcode = record.Barcode,
+            ImageBase64 = imageBase64,
         };
 
         var handler = MeasurementReceived;

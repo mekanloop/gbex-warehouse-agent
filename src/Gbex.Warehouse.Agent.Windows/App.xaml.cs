@@ -46,11 +46,10 @@ public partial class App : Application
 
         var builder = Host.CreateApplicationBuilder();
         builder.Logging.AddDebug();
-        // File-based rotating logs are configured via the standard
-        // Microsoft.Extensions.Logging providers — see docs/DEPLOYMENT.md
-        // for the log location and rotation/retention policy. Never logs
-        // secrets (see GbexApiClient/EasyCubeClient — they only log status
-        // codes and error type names).
+        builder.Logging.AddProvider(new Gbex.Warehouse.Agent.Windows.Diagnostics.FileLoggerProvider(Path.Combine(appDataDir, "logs")));
+        // Rolling daily text files under %LOCALAPPDATA%\GbexWarehouseAgent\logs.
+        // Never logs secrets (see GbexApiClient/EasyCubeClient — they only
+        // log status codes and error type names).
 
         builder.Services.AddSingleton(settingsStore);
         builder.Services.AddSingleton(settings);
