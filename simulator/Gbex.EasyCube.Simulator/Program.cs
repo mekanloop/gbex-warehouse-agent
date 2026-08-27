@@ -2,6 +2,8 @@ using Gbex.EasyCube.Simulator;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<ScenarioState>();
+builder.Services.AddSingleton<EasyCubeTcpSimulator>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EasyCubeTcpSimulator>());
 var app = builder.Build();
 
 // --- Simulator control (test-only, not part of the real device's API) ---
@@ -20,6 +22,27 @@ app.MapPost("/simulator/configure", (ScenarioState state, ScenarioConfig config)
 app.MapPost("/simulator/reset", (ScenarioState state) =>
 {
     state.Scenario = SimulatorScenario.Healthy;
+    return Results.Ok(new { ok = true });
+});
+
+// --- EasyCube TCP/IP Protocol simulator (raw socket, "Protocol 0") ---
+app.MapGet("/simulator/tcp-port", (EasyCubeTcpSimulator tcp) => Results.Ok(new { port = tcp.Port }));
+
+app.MapPost("/simulator/tcp-push", async (EasyCubeTcpSimulator tcp, TcpPushRequest? request) =>
+{
+    await tcp.PushMeasurementAsync(request?.Fragmented ?? false);
+    return Results.Ok(new { ok = true });
+});
+
+app.MapPost("/simulator/tcp-push-raw", async (EasyCubeTcpSimulator tcp, TcpRawRequest request) =>
+{
+    await tcp.SendRawAsync(request.Raw);
+    return Results.Ok(new { ok = true });
+});
+
+app.MapPost("/simulator/tcp-drop", (EasyCubeTcpSimulator tcp) =>
+{
+    tcp.DropCurrentClient();
     return Results.Ok(new { ok = true });
 });
 
@@ -128,6 +151,9 @@ object BuildMeasurement(
         ImgBase64 = state.ImageBase64,
     };
 }
+
+public sealed record TcpPushRequest(bool? Fragmented = null);
+public sealed record TcpRawRequest(string Raw);
 
 public sealed record ScenarioConfig(
     SimulatorScenario Scenario,

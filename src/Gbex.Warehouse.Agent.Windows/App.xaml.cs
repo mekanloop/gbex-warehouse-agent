@@ -77,11 +77,22 @@ public partial class App : Application
             AllowInsecureForDevelopment = settings.AllowInsecureGbexForDevelopment,
         }));
 
+        // Optional fallback only — see EasyCubeOptions/AgentSettings.EasyCubeBaseUrl doc.
         builder.Services.AddHttpClient<IEasyCubeClient, EasyCubeClient>();
         builder.Services.AddSingleton(Options.Create(new EasyCubeOptions
         {
             BaseUrl = string.IsNullOrWhiteSpace(settings.EasyCubeBaseUrl) ? "http://localhost:8080" : settings.EasyCubeBaseUrl,
         }));
+
+        // PRIMARY EasyCube connection: persistent TCP/IP push.
+        builder.Services.AddSingleton(Options.Create(new EasyCubeTcpOptions
+        {
+            Host = string.IsNullOrWhiteSpace(settings.EasyCubeTcpHost) ? "127.0.0.1" : settings.EasyCubeTcpHost,
+            Port = settings.EasyCubeTcpPort > 0 ? settings.EasyCubeTcpPort : 9990,
+        }));
+        builder.Services.AddSingleton<EasyCubeTcpListener>();
+        builder.Services.AddSingleton<IEasyCubeConnection>(sp => sp.GetRequiredService<EasyCubeTcpListener>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<EasyCubeTcpListener>());
 
         builder.Services.AddSingleton(sp => new WarehouseWorkflowEngine(
             sp.GetRequiredService<IGbexApiClient>(),
@@ -105,6 +116,7 @@ public partial class App : Application
             sp.GetRequiredService<HeartbeatService>(),
             sp.GetRequiredService<IOutboxStore>(),
             sp.GetRequiredService<IEasyCubeClient>(),
+            sp.GetRequiredService<IEasyCubeConnection>(),
             sp.GetRequiredService<ISecretStore>(),
             sp.GetRequiredService<AgentSettings>(),
             sp.GetRequiredService<IClock>(),

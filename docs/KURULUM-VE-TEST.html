@@ -38,32 +38,52 @@
   <div class="warn">İstasyon anahtarını kimseyle paylaşmayın. Yanlışlıkla kaybederseniz GBEX yöneticinizden yeni bir anahtar isteyin.</div>
 </div>
 
-<h2>3. EasyCube Cihazının Bağlanması</h2>
+<h2>3. Fiziksel Bağlantı Şeması</h2>
 <div class="step">
-  Aynı ekranda <b>EasyCube Cihaz Adresi</b> kutusuna, ölçüm cihazının yerel ağ adresini girin (örn. <code>http://192.168.1.50:8080</code>) — bu bilgiyi cihazın kurulumunu yapan teknisyenden alabilirsiniz.<br>
-  Ardından her iki alan için de yanlarındaki <b>"Bağlantıyı Test Et"</b> düğmelerine basın (bkz. Bölüm 5).
+  Barkod okuyucu artık bilgisayara değil, <b>doğrudan EasyCube cihazına</b> bağlanır. Bağlantılar şu sırayla kurulmalıdır:
+  <ol>
+    <li><b>Barkod okuyucu → EasyCube (USB)</b> — el barkod okuyucusu EasyCube cihazının USB girişine takılır.</li>
+    <li><b>EasyCube → Ağ anahtarı / switch (Ethernet)</b> — EasyCube, bir Ethernet kablosuyla depodaki ağ anahtarına (switch) bağlanır.</li>
+    <li><b>Windows bilgisayar → Aynı ağ anahtarı / switch</b> — Depo Ajanı'nın kurulu olduğu bilgisayar da aynı switch'e (Ethernet veya Wi-Fi ile aynı ağa) bağlı olmalıdır.</li>
+    <li><b>Depo bilgisayarı → İnternet → GBEX</b> — bilgisayarın ayrıca normal internet erişimi olmalıdır (GBEX sunucusuyla konuşmak için).</li>
+  </ol>
+  <div class="warn">EasyCube ile depo bilgisayarı AYNI yerel ağda olmalıdır — biri diğerine doğrudan kablo ile değil, ikisi de aynı switch/ağ anahtarına bağlanır.</div>
 </div>
 
-<h2>4. Barkod Okutma</h2>
+<h2>4. EasyCube Bağlantısının Ayarlanması</h2>
 <div class="step">
+  Ayar ekranında <b>"EasyCube IP Adresi ve TCP Portu (Ana Bağlantı)"</b> bölümüne, EasyCube cihazının ağ üzerindeki IP adresini ve portunu girin (örn. <code>192.168.1.50</code> / <code>9990</code>) — bu bilgiyi cihazın kurulumunu yapan teknisyenden alabilirsiniz.<br>
+  Girdikten sonra yanındaki <b>"Bağlantıyı Test Et"</b> düğmesine basın (bkz. Bölüm 6).
+  <div class="warn">
+    <b>"EasyCube HTTP Adresi (Yalnızca Yedek)"</b> alanı normal kullanımda BOŞ bırakılabilir — yalnızca barkod okuyucu bilgisayara takılıysa ve elle barkod girişi kullanılacaksa doldurulur.
+  </div>
+</div>
+
+<h2>5. Barkod Okutma (Otomatik)</h2>
+<div class="step">
+  Normal kullanımda ekranda hiçbir şey yapmanız gerekmez:
   <ol>
-    <li>Ana ekrandaki <b>Barkod</b> kutusuna imleç geldiğinde, el barkod okuyucusuyla gönderi barkodunu okutun (veya barkodu klavyeden yazıp <b>Enter</b>'a basın).</li>
-    <li>Sistem gönderiyi bulur, beyan edilen ağırlık/ölçüleri gösterir ve EasyCube cihazından otomatik ölçüm alır.</li>
+    <li>Gönderiyi EasyCube'un altına/önüne yerleştirin ve barkodunu EasyCube'a takılı el okuyucusuyla okutun.</li>
+    <li>EasyCube, barkodu ve ölçümü (ağırlık, uzunluk, genişlik, yükseklik) birlikte otomatik olarak Depo Ajanı'na gönderir.</li>
+    <li>Sistem gönderiyi bulur, beyan edilen ağırlık/ölçüleri gösterir ve karşılaştırmayı otomatik yapar.</li>
     <li>Sonuç ekranda görünür: <b>"UYGUN"</b> (ölçüm doğrulandı) veya <b>"BEKLEMEDE"</b> (fark tespit edildi, bir GBEX operatörünün incelemesi gerekir).</li>
   </ol>
+  <div class="step" style="background:#eef2ff;">
+    <b>Yedek yöntem:</b> Barkod okuyucu bilgisayara takılıysa, ana ekrandaki <b>"Yedek — barkodu elle gir"</b> kutusuna barkodu okutup/yazıp <b>Enter</b>'a basabilirsiniz. Bu yalnızca EasyCube'un otomatik gönderimi çalışmadığında kullanılmalıdır.
+  </div>
   <div class="ok">Fiyatlandırma, onay, ödeme ve kargo değişimi işlemleri bu programda YAPILMAZ — bunlar GBEX web yönetim panelinde yapılır.</div>
 </div>
 
-<h2>5. Bağlantı Testi</h2>
+<h2>6. Bağlantı Testi</h2>
 <div class="step">
-  Ayar ekranındaki her iki <b>"Bağlantıyı Test Et"</b> düğmesi de anında sonuç verir:
+  Ayar ekranındaki <b>"Bağlantıyı Test Et"</b> düğmeleri (GBEX sunucusu, EasyCube ana bağlantı, EasyCube yedek bağlantı) anında sonuç verir:
   <ul>
     <li><b>✓ Başarılı</b> — o sistemle bağlantı çalışıyor.</li>
-    <li><b>✗ Bulunamadı / Ulaşılamadı</b> — adres yanlış olabilir veya cihaz/sunucu kapalı olabilir. Adresi kontrol edin, sorunu çözemiyorsanız Bölüm 6'ya bakın.</li>
+    <li><b>✗ Bulunamadı / Ulaşılamadı</b> — adres yanlış olabilir veya cihaz/sunucu kapalı olabilir, ya da EasyCube ile bilgisayar aynı ağda değildir. Adresi ve fiziksel bağlantıyı (Bölüm 3) kontrol edin, sorunu çözemiyorsanız Bölüm 7'ye bakın.</li>
   </ul>
 </div>
 
-<h2>6. Hata Durumunda: Tanılama Raporunun Gönderilmesi</h2>
+<h2>7. Hata Durumunda: Tanılama Raporunun Gönderilmesi</h2>
 <div class="step">
   Bir sorunla karşılaşırsanız, ana ekrandaki <b>"Tanılama Raporunu Dışa Aktar"</b> düğmesine basın. Bir metin dosyası (.txt) kaydedilir.
   <div class="ok">Bu rapor istasyon anahtarınızı veya müşteri bilgilerini İÇERMEZ — güvenle e-posta ile gönderebilirsiniz.</div>

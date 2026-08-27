@@ -21,6 +21,10 @@ public sealed record DiagnosticsReport
     public DateTimeOffset? LastSuccessfulHeartbeatAtUtc { get; init; }
     public required bool StationSecretConfigured { get; init; }
 
+    /// <summary>Primary connection — "host:port" for the TCP push link, never a value that could be confused with a secret.</summary>
+    public required string EasyCubeTcpAddress { get; init; }
+    public required string EasyCubeTcpConnectionState { get; init; }
+    /// <summary>Optional fallback HTTP address — empty if never configured.</summary>
     public required string EasyCubeBaseUrl { get; init; }
     public required string EasyCubeConnectionState { get; init; }
     public string? EasyCubeDeviceModel { get; init; }

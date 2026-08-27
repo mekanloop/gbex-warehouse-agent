@@ -223,4 +223,96 @@ public class WarehouseWorkflowEngineTests
         Assert.Contains("camera disconnected", failure.Reason);
         Assert.Equal(AgentWorkflowState.EasyCubeError, engine.State);
     }
+
+    // --- HandleDeviceMeasurementAsync: the PRIMARY TCP-push flow — the
+    // barcode comes FROM the device's own pushed record, there is no
+    // separate "operator scanned this on the PC" step. ---
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_rejects_a_record_with_no_barcode_before_any_lookup()
+    {
+        var fx = new Fixture();
+        var engine = fx.BuildEngine();
+
+        var result = await engine.HandleDeviceMeasurementAsync(Measurement() with { DeviceReportedBarcode = null }, CancellationToken.None);
+
+        Assert.Null(result.Order);
+        Assert.IsType<MeasureOutcome.EasyCubeFailure>(result.Outcome);
+        fx.GbexClient.Verify(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_rejects_a_record_whose_barcode_is_not_a_valid_gbex_shape()
+    {
+        var fx = new Fixture();
+        var engine = fx.BuildEngine();
+
+        var result = await engine.HandleDeviceMeasurementAsync(Measurement() with { DeviceReportedBarcode = "not-a-barcode" }, CancellationToken.None);
+
+        Assert.Null(result.Order);
+        Assert.IsType<MeasureOutcome.EasyCubeFailure>(result.Outcome);
+        fx.GbexClient.Verify(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_surfaces_a_lookup_failure_without_a_resolved_order()
+    {
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync("GBEX2508230001", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GbexApiResult.NotFound("bulunamadı"));
+
+        var engine = fx.BuildEngine();
+        var result = await engine.HandleDeviceMeasurementAsync(Measurement() with { DeviceReportedBarcode = "GBEX2508230001" }, CancellationToken.None);
+
+        Assert.Null(result.Order);
+        var lookupFailed = Assert.IsType<MeasureOutcome.LookupFailed>(result.Outcome);
+        Assert.IsType<LookupOutcome.NotFound>(lookupFailed.Reason);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_looks_up_correlates_and_submits_in_one_pass_on_success()
+    {
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync("GBEX2508230001", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-device-1", Result = MeasurementResultKind.Pass, RequiresEvidence = false }));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        Assert.NotNull(result.Order);
+        Assert.Equal("GBEX2508230001", result.Order!.GbexBarcode);
+        var pass = Assert.IsType<MeasureOutcome.Pass>(result.Outcome);
+        Assert.Equal("m-device-1", pass.MeasurementId);
+        Assert.Equal(AgentWorkflowState.VerifiedPass, engine.State);
+
+        // The device's own barcode is what's used for lookup — no separate
+        // "operator scanned this on the PC" value ever enters this flow.
+        fx.EasyCubeClient.Verify(c => c.CaptureMeasurementAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_rejects_a_second_push_reusing_the_same_package_number()
+    {
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-dup-1", Result = MeasurementResultKind.Pass, RequiresEvidence = false }));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" };
+
+        var first = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+        Assert.IsType<MeasureOutcome.Pass>(first.Outcome);
+
+        // Same PackageNumber pushed again (e.g. device retransmit after a
+        // reconnect) — must be rejected, never resubmitted.
+        var second = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+        var rejected = Assert.IsType<MeasureOutcome.CorrelationRejected>(second.Outcome);
+        Assert.IsType<CorrelationResult.PackageNumberAlreadyUsed>(rejected.Reason);
+        fx.GbexClient.Verify(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

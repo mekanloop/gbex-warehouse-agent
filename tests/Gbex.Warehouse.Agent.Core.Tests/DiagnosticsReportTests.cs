@@ -43,7 +43,7 @@ public class DiagnosticsReportTests
 
         var report = await DiagnosticsReportBuilder.BuildAsync(
             "1.0.0", "https://app.gbex.com.tr", "Connected", DateTimeOffset.UtcNow,
-            secretStore, "http://localhost:8080", "Connected", "EasyCube-1.6", "3.0", "dev-1",
+            secretStore, "192.168.1.50:9990", "Connected", "http://localhost:8080", "Connected", "EasyCube-1.6", "3.0", "dev-1",
             outbox.Object, CancellationToken.None);
 
         Assert.True(report.StationSecretConfigured);
@@ -65,7 +65,7 @@ public class DiagnosticsReportTests
 
         var report = await DiagnosticsReportBuilder.BuildAsync(
             "1.0.0", "https://app.gbex.com.tr", "Degraded", null,
-            secretStore, "http://localhost:8080", "Offline", null, null, null,
+            secretStore, "192.168.1.50:9990", "Reconnecting", "http://localhost:8080", "Offline", null, null, null,
             outbox.Object, CancellationToken.None);
 
         var rendered = DiagnosticsReportBuilder.RenderAsText(report);

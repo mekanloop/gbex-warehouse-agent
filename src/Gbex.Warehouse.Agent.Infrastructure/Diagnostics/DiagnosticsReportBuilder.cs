@@ -11,6 +11,8 @@ public static class DiagnosticsReportBuilder
         string gbexConnectionState,
         DateTimeOffset? lastHeartbeatAt,
         ISecretStore secretStore,
+        string easyCubeTcpAddress,
+        string easyCubeTcpConnectionState,
         string easyCubeBaseUrl,
         string easyCubeConnectionState,
         string? easyCubeDeviceModel,
@@ -27,6 +29,8 @@ public static class DiagnosticsReportBuilder
             GbexConnectionState = gbexConnectionState,
             LastSuccessfulHeartbeatAtUtc = lastHeartbeatAt,
             StationSecretConfigured = await secretStore.HasStationSecretAsync(ct),
+            EasyCubeTcpAddress = easyCubeTcpAddress,
+            EasyCubeTcpConnectionState = easyCubeTcpConnectionState,
             EasyCubeBaseUrl = easyCubeBaseUrl,
             EasyCubeConnectionState = easyCubeConnectionState,
             EasyCubeDeviceModel = easyCubeDeviceModel,
@@ -53,12 +57,16 @@ public static class DiagnosticsReportBuilder
         sb.AppendLine($"Son başarılı nabız: {(report.LastSuccessfulHeartbeatAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "hiç yok")}");
         sb.AppendLine($"İstasyon anahtarı kayıtlı mı: {(report.StationSecretConfigured ? "Evet" : "Hayır")}");
         sb.AppendLine();
-        sb.AppendLine("== EasyCube Bağlantısı ==");
-        sb.AppendLine($"Adres: {report.EasyCubeBaseUrl}");
-        sb.AppendLine($"Durum: {report.EasyCubeConnectionState}");
+        sb.AppendLine("== EasyCube Bağlantısı (TCP — birincil) ==");
+        sb.AppendLine($"Adres: {report.EasyCubeTcpAddress}");
+        sb.AppendLine($"Durum: {report.EasyCubeTcpConnectionState}");
         sb.AppendLine($"Cihaz modeli: {report.EasyCubeDeviceModel ?? "bilinmiyor"}");
         sb.AppendLine($"Yazılım sürümü: {report.EasyCubeSoftwareVersion ?? "bilinmiyor"}");
         sb.AppendLine($"Cihaz kimliği (ayarlarda girilen): {report.DeviceId ?? "girilmemiş"}");
+        sb.AppendLine();
+        sb.AppendLine("== EasyCube Bağlantısı (HTTP — yalnızca yedek) ==");
+        sb.AppendLine($"Adres: {(string.IsNullOrWhiteSpace(report.EasyCubeBaseUrl) ? "yapılandırılmadı" : report.EasyCubeBaseUrl)}");
+        sb.AppendLine($"Durum: {report.EasyCubeConnectionState}");
         sb.AppendLine();
         sb.AppendLine("== Çevrimdışı Kuyruk ==");
         sb.AppendLine($"Bekleyen işlem sayısı: {report.OfflineQueueCount}");

@@ -12,11 +12,24 @@ namespace Gbex.Warehouse.Agent.Infrastructure.Configuration;
 public sealed class AgentSettings
 {
     public string GbexApiBaseUrl { get; set; } = "";
+
+    /// <summary>PRIMARY EasyCube connection: the device's IP on the warehouse LAN, e.g. "192.168.1.50". See EasyCubeTcpPort for the matching TCP/IP server port.</summary>
+    public string EasyCubeTcpHost { get; set; } = "";
+
+    /// <summary>PRIMARY EasyCube connection's TCP/IP server port (the guide's TCPS command — device-configurable, default example 9990).</summary>
+    public int EasyCubeTcpPort { get; set; } = 9990;
+
+    /// <summary>OPTIONAL fallback only — EasyCube's HTTP Web API base URL, used solely by the manual keyboard-wedge flow when the primary TCP push connection isn't configured/working. Never required for first-run to complete.</summary>
     public string EasyCubeBaseUrl { get; set; } = "";
+
     public string? DeviceId { get; set; }
     public bool AllowInsecureGbexForDevelopment { get; set; }
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(GbexApiBaseUrl) && !string.IsNullOrWhiteSpace(EasyCubeBaseUrl);
+    /// <summary>The fallback HTTP address is deliberately excluded — first-run must not block on an optional, secondary connection.</summary>
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(GbexApiBaseUrl)
+        && !string.IsNullOrWhiteSpace(EasyCubeTcpHost)
+        && EasyCubeTcpPort is > 0 and <= 65535;
 }
 
 public sealed class AgentSettingsStore

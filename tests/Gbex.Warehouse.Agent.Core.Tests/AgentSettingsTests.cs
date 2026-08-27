@@ -6,17 +6,25 @@ namespace Gbex.Warehouse.Agent.Core.Tests;
 public class AgentSettingsTests
 {
     [Fact]
-    public void IsConfigured_is_false_when_either_required_address_is_missing()
+    public void IsConfigured_is_false_when_either_required_field_is_missing()
     {
         Assert.False(new AgentSettings().IsConfigured);
         Assert.False(new AgentSettings { GbexApiBaseUrl = "https://app.gbex.com.tr" }.IsConfigured);
-        Assert.False(new AgentSettings { EasyCubeBaseUrl = "http://localhost:8080" }.IsConfigured);
+        Assert.False(new AgentSettings { EasyCubeTcpHost = "192.168.1.50", EasyCubeTcpPort = 9990 }.IsConfigured);
+        Assert.False(new AgentSettings { GbexApiBaseUrl = "https://app.gbex.com.tr", EasyCubeTcpHost = "192.168.1.50", EasyCubeTcpPort = 0 }.IsConfigured);
     }
 
     [Fact]
-    public void IsConfigured_is_true_once_both_required_addresses_are_set()
+    public void IsConfigured_is_true_once_gbex_url_and_the_primary_tcp_connection_are_set()
     {
-        var settings = new AgentSettings { GbexApiBaseUrl = "https://app.gbex.com.tr", EasyCubeBaseUrl = "http://localhost:8080" };
+        var settings = new AgentSettings { GbexApiBaseUrl = "https://app.gbex.com.tr", EasyCubeTcpHost = "192.168.1.50", EasyCubeTcpPort = 9990 };
+        Assert.True(settings.IsConfigured);
+    }
+
+    [Fact]
+    public void IsConfigured_does_not_require_the_optional_http_fallback_address()
+    {
+        var settings = new AgentSettings { GbexApiBaseUrl = "https://app.gbex.com.tr", EasyCubeTcpHost = "192.168.1.50", EasyCubeTcpPort = 9990, EasyCubeBaseUrl = "" };
         Assert.True(settings.IsConfigured);
     }
 
@@ -47,6 +55,8 @@ public class AgentSettingsStoreTests : IDisposable
         var original = new AgentSettings
         {
             GbexApiBaseUrl = "https://app.gbex.com.tr",
+            EasyCubeTcpHost = "192.168.1.50",
+            EasyCubeTcpPort = 9990,
             EasyCubeBaseUrl = "http://192.168.1.50:8080",
             DeviceId = "depo-1",
             AllowInsecureGbexForDevelopment = false,
@@ -56,6 +66,8 @@ public class AgentSettingsStoreTests : IDisposable
         var loaded = store.Load();
 
         Assert.Equal(original.GbexApiBaseUrl, loaded.GbexApiBaseUrl);
+        Assert.Equal(original.EasyCubeTcpHost, loaded.EasyCubeTcpHost);
+        Assert.Equal(original.EasyCubeTcpPort, loaded.EasyCubeTcpPort);
         Assert.Equal(original.EasyCubeBaseUrl, loaded.EasyCubeBaseUrl);
         Assert.Equal(original.DeviceId, loaded.DeviceId);
         Assert.True(loaded.IsConfigured);

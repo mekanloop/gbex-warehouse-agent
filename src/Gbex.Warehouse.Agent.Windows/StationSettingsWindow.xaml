@@ -1,7 +1,8 @@
 <Window x:Class="Gbex.Warehouse.Agent.Windows.StationSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="İstasyon Ayarları" Height="560" Width="520" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        Title="İstasyon Ayarları" Height="720" Width="540" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="16">
         <TextBlock x:Name="WelcomeText" FontSize="14" FontWeight="Bold" Foreground="#2E7D32" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"
                    Text="Kuruluma hoş geldiniz. Devam etmek için aşağıdaki bilgileri girip 'Kaydet' butonuna basın." />
@@ -23,8 +24,24 @@
         <TextBlock Text="GBEX yöneticinizden aldığınız anahtarı buraya yapıştırın. Kaydettikten sonra bir daha görüntülenmez." TextWrapping="Wrap" FontSize="11" Foreground="Gray" Margin="0,0,0,4" />
         <PasswordBox x:Name="StationSecretBox" Margin="0,0,0,12" />
 
-        <TextBlock Text="EasyCube Cihaz Adresi / Portu" FontWeight="Bold" />
-        <TextBlock Text="Örnek: http://192.168.1.50:8080" FontSize="11" Foreground="Gray" />
+        <TextBlock Text="EasyCube IP Adresi ve TCP Portu (Ana Bağlantı)" FontWeight="Bold" />
+        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="Gray"
+                   Text="Barkod okuyucu EasyCube cihazına, EasyCube ise Ethernet kablosuyla aynı ağ anahtarına (switch) bağlıdır. Buraya EasyCube'un ağ üzerindeki IP adresini ve TCP portunu girin — örnek: 192.168.1.50 / 9990." />
+        <Grid Margin="0,4,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="EasyCubeTcpHostBox" Grid.Column="0" Margin="0,0,8,0" />
+            <TextBox x:Name="EasyCubeTcpPortBox" Grid.Column="1" Margin="0,0,8,0" />
+            <Button Grid.Column="2" Content="Bağlantıyı Test Et" Padding="8,4" Click="TestEasyCubeTcpConnection_Click" />
+        </Grid>
+        <TextBlock x:Name="EasyCubeTcpTestResultText" Margin="0,0,0,8" TextWrapping="Wrap" FontSize="12" />
+
+        <TextBlock Text="EasyCube HTTP Adresi (Yalnızca Yedek — Opsiyonel)" FontWeight="Bold" Margin="0,4,0,0" />
+        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="Gray"
+                   Text="Yalnızca barkod okuyucu PC'ye takılıysa ve elle barkod girişi kullanılacaksa doldurun. Normal kullanımda boş bırakılabilir. Örnek: http://192.168.1.50:8080" />
         <Grid Margin="0,4,0,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -46,4 +63,5 @@
 
         <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" FontWeight="Bold" />
     </StackPanel>
+    </ScrollViewer>
 </Window>

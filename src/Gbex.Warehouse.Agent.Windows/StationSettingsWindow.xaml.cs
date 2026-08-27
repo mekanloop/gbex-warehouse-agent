@@ -42,6 +42,8 @@ public partial class StationSettingsWindow : Window
 
         var settings = _settingsStore.Load();
         GbexBaseUrlBox.Text = settings.GbexApiBaseUrl;
+        EasyCubeTcpHostBox.Text = settings.EasyCubeTcpHost;
+        EasyCubeTcpPortBox.Text = settings.EasyCubeTcpPort > 0 ? settings.EasyCubeTcpPort.ToString() : "9990";
         EasyCubeBaseUrlBox.Text = settings.EasyCubeBaseUrl;
         DeviceIdBox.Text = settings.DeviceId ?? "";
         RefreshSecretStatus();
@@ -55,16 +57,25 @@ public partial class StationSettingsWindow : Window
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(GbexBaseUrlBox.Text) || string.IsNullOrWhiteSpace(EasyCubeBaseUrlBox.Text))
+        if (string.IsNullOrWhiteSpace(GbexBaseUrlBox.Text) || string.IsNullOrWhiteSpace(EasyCubeTcpHostBox.Text))
         {
             ResultText.Foreground = System.Windows.Media.Brushes.DarkRed;
-            ResultText.Text = "GBEX sunucu adresi ve EasyCube cihaz adresi zorunludur.";
+            ResultText.Text = "GBEX sunucu adresi ve EasyCube IP adresi zorunludur.";
+            return;
+        }
+
+        if (!int.TryParse(EasyCubeTcpPortBox.Text.Trim(), out var tcpPort) || tcpPort is <= 0 or > 65535)
+        {
+            ResultText.Foreground = System.Windows.Media.Brushes.DarkRed;
+            ResultText.Text = "EasyCube TCP portu geçersiz. Örnek: 9990";
             return;
         }
 
         var settings = new AgentSettings
         {
             GbexApiBaseUrl = GbexBaseUrlBox.Text.Trim(),
+            EasyCubeTcpHost = EasyCubeTcpHostBox.Text.Trim(),
+            EasyCubeTcpPort = tcpPort,
             EasyCubeBaseUrl = EasyCubeBaseUrlBox.Text.Trim(),
             DeviceId = string.IsNullOrWhiteSpace(DeviceIdBox.Text) ? null : DeviceIdBox.Text.Trim(),
         };
@@ -124,6 +135,32 @@ public partial class StationSettingsWindow : Window
             // (it names the offending scheme/host, never a secret).
             GbexTestResultText.Text = $"✗ {ex.Message}";
         }
+    }
+
+    private async void TestEasyCubeTcpConnection_Click(object sender, RoutedEventArgs e)
+    {
+        EasyCubeTcpTestResultText.Text = "Test ediliyor…";
+        var host = EasyCubeTcpHostBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            EasyCubeTcpTestResultText.Text = "Önce EasyCube IP adresini girin.";
+            return;
+        }
+        if (!int.TryParse(EasyCubeTcpPortBox.Text.Trim(), out var port) || port is <= 0 or > 65535)
+        {
+            EasyCubeTcpTestResultText.Text = "Geçersiz TCP portu. Örnek: 9990";
+            return;
+        }
+
+        var result = await EasyCubeTcpProbe.TestAsync(host, port, TimeSpan.FromSeconds(5), CancellationToken.None);
+        EasyCubeTcpTestResultText.Text = result switch
+        {
+            EasyCubeTcpProbeResult.Ok ok => $"✓ Bağlantı başarılı — cihaz: {ok.DeviceModel}",
+            EasyCubeTcpProbeResult.Unreachable => "✗ Cihaza ulaşılamadı. IP adresini, portu ve ağ/switch bağlantısını kontrol edin.",
+            EasyCubeTcpProbeResult.Timeout => "✗ Cihaz yanıt vermedi (zaman aşımı).",
+            EasyCubeTcpProbeResult.UnexpectedResponse => "✗ Cihazdan beklenmeyen bir yanıt alındı.",
+            _ => "✗ Bilinmeyen sonuç.",
+        };
     }
 
     private async void TestEasyCubeConnection_Click(object sender, RoutedEventArgs e)

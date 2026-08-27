@@ -10,13 +10,6 @@ public enum StationConnectionState
     Disabled,
 }
 
-public enum EasyCubeConnectionState
-{
-    Connected,
-    Unhealthy,
-    Offline,
-}
-
 /// <summary>The operator-visible workflow state — one enum, matches the required WPF UI states exactly.</summary>
 public enum AgentWorkflowState
 {

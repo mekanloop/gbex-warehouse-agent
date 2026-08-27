@@ -26,7 +26,12 @@ public abstract record MeasureOutcome
     public sealed record EasyCubeFailure(string Reason) : MeasureOutcome;
     public sealed record CorrelationRejected(CorrelationResult Reason) : MeasureOutcome;
     public sealed record Rejected(string Reason) : MeasureOutcome;
+    /// <summary>The device pushed a measurement, but looking up its barcode failed — only reachable from HandleDeviceMeasurementAsync (the manual keyboard-wedge fallback surfaces lookup failures directly as a LookupOutcome instead, before any measurement is ever taken).</summary>
+    public sealed record LookupFailed(LookupOutcome Reason) : MeasureOutcome;
 }
+
+/// <summary>Result of the device-push flow: the order, if lookup got far enough to resolve one, plus the final outcome.</summary>
+public sealed record DeviceMeasurementResult(StationOrderDto? Order, MeasureOutcome Outcome);
 
 /// <summary>
 /// The workflow core: IDLE -> scan -> lookup -> display -> measure ->
@@ -94,8 +99,14 @@ public sealed class WarehouseWorkflowEngine
             return new LookupOutcome.InvalidBarcode(reason);
         }
 
+        return await LookupOrderInternalAsync(valid.Barcode, ct);
+    }
+
+    /// <summary>Shared by the manual (keyboard-wedge fallback) and device-push flows — the barcode is already normalized/validated by the caller.</summary>
+    private async Task<LookupOutcome> LookupOrderInternalAsync(string barcode, CancellationToken ct)
+    {
         SetState(AgentWorkflowState.LookingUpOrder);
-        var result = await _gbexClient.LookupOrderAsync(valid.Barcode, ct);
+        var result = await _gbexClient.LookupOrderAsync(barcode, ct);
 
         switch (result)
         {
@@ -120,6 +131,44 @@ public sealed class WarehouseWorkflowEngine
         }
     }
 
+    /// <summary>
+    /// PRIMARY flow entry point — called whenever EasyCube's own persistent
+    /// TCP connection pushes a combined barcode+measurement record (see
+    /// IEasyCubeConnection). The barcode scanner is wired into EasyCube
+    /// itself, not the PC, so there is no separate "operator scanned this on
+    /// the PC" step here: the pushed record's own barcode field IS the
+    /// correlation key, used to look up the order AND to validate the
+    /// measurement, in one pass.
+    /// </summary>
+    public async Task<DeviceMeasurementResult> HandleDeviceMeasurementAsync(CapturedMeasurement measurement, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(measurement.DeviceReportedBarcode))
+        {
+            SetState(AgentWorkflowState.EasyCubeError);
+            _logger.LogWarning("EasyCube pushed a measurement (package {PackageNumber}) with no barcode — cannot look up an order", measurement.PackageNumber);
+            return new DeviceMeasurementResult(null, new MeasureOutcome.EasyCubeFailure(
+                "EasyCube ölçümünde barkod yok — barkod okuyucunun EasyCube'a bağlı olduğundan ve barkod korelasyon modunun açık olduğundan emin olun."));
+        }
+
+        var normalized = BarcodeNormalizer.Normalize(measurement.DeviceReportedBarcode);
+        if (normalized is not BarcodeNormalizationResult.Valid valid)
+        {
+            SetState(AgentWorkflowState.EasyCubeError);
+            return new DeviceMeasurementResult(null, new MeasureOutcome.EasyCubeFailure(
+                $"EasyCube'un okuduğu barkod geçersiz: {measurement.DeviceReportedBarcode}"));
+        }
+
+        var lookup = await LookupOrderInternalAsync(valid.Barcode, ct);
+        if (lookup is not LookupOutcome.Found found)
+        {
+            return new DeviceMeasurementResult(null, new MeasureOutcome.LookupFailed(lookup));
+        }
+
+        var outcome = await ValidateAndSubmitAsync(found.Order, measurement, ct);
+        return new DeviceMeasurementResult(found.Order, outcome);
+    }
+
+    /// <summary>FALLBACK flow only — actively pulls a measurement from EasyCube's HTTP Web API after the operator manually scans/types a barcode into the PC. Never the default path; see IEasyCubeConnection/HandleDeviceMeasurementAsync for the primary TCP push flow.</summary>
     public async Task<MeasureOutcome> MeasureAndSubmitAsync(StationOrderDto order, CancellationToken ct)
     {
         SetState(AgentWorkflowState.Measuring);
@@ -133,7 +182,12 @@ public sealed class WarehouseWorkflowEngine
             return new MeasureOutcome.EasyCubeFailure(reason);
         }
 
-        var measurement = measurementOutcome.Measurement;
+        return await ValidateAndSubmitAsync(order, measurementOutcome.Measurement, ct);
+    }
+
+    /// <summary>Shared tail of both flows: correlate, save any evidence image, submit idempotently, handle PASS/MISMATCH. `measurement` is already unit-normalized (KG/CM) and, for the device-push flow, already known to have a barcode — the caller looked the order up using it.</summary>
+    private async Task<MeasureOutcome> ValidateAndSubmitAsync(StationOrderDto order, CapturedMeasurement measurement, CancellationToken ct)
+    {
         var correlationResult = _correlation.Validate(order.GbexBarcode, measurement);
         if (correlationResult is not CorrelationResult.Valid)
         {

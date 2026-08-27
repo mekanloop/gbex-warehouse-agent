@@ -26,6 +26,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly HeartbeatService _heartbeat;
     private readonly IOutboxStore _outbox;
     private readonly IEasyCubeClient _easyCubeClient;
+    private readonly IEasyCubeConnection _easyCubeConnection;
     private readonly ISecretStore _secretStore;
     private readonly AgentSettings _settings;
     private readonly ScanDebouncer _debouncer;
@@ -51,18 +52,31 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public DateTimeOffset? LastHeartbeatAt => _heartbeat.LastSuccessfulHeartbeatAt;
 
-    private string _easyCubeStatusText = "Kontrol ediliyor…";
-    public string EasyCubeStatusText
+    /// <summary>Primary connection status — driven by the persistent EasyCube TCP link, not the optional HTTP fallback (see EasyCubeFallbackStatusText for that).</summary>
+    public string EasyCubeStatusText => _easyCubeConnection.State switch
     {
-        get => _easyCubeStatusText;
-        private set { _easyCubeStatusText = value; Raise(); }
-    }
+        EasyCubeConnectionState.Connected => "Bağlı — otomatik ölçüm bekleniyor",
+        EasyCubeConnectionState.Connecting => "Bağlanıyor…",
+        EasyCubeConnectionState.Reconnecting => "Bağlantı kesildi — yeniden bağlanılıyor…",
+        EasyCubeConnectionState.Disconnected => "Bağlı değil",
+        _ => "Bilinmiyor",
+    };
 
     private string? _easyCubeDeviceModel;
     public string? EasyCubeDeviceModel { get => _easyCubeDeviceModel; private set { _easyCubeDeviceModel = value; Raise(); } }
 
     private string? _easyCubeSoftwareVersion;
     public string? EasyCubeSoftwareVersion { get => _easyCubeSoftwareVersion; private set { _easyCubeSoftwareVersion = value; Raise(); } }
+
+    /// <summary>Only meaningful when a fallback HTTP address is configured — "" otherwise, and the UI hides the fallback tile entirely in that case.</summary>
+    private string _easyCubeFallbackStatusText = "";
+    public string EasyCubeFallbackStatusText
+    {
+        get => _easyCubeFallbackStatusText;
+        private set { _easyCubeFallbackStatusText = value; Raise(); }
+    }
+
+    public bool EasyCubeFallbackConfigured => !string.IsNullOrWhiteSpace(_settings.EasyCubeBaseUrl);
 
     private AgentWorkflowState _workflowState = AgentWorkflowState.Ready;
     public AgentWorkflowState WorkflowState
@@ -120,6 +134,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         HeartbeatService heartbeat,
         IOutboxStore outbox,
         IEasyCubeClient easyCubeClient,
+        IEasyCubeConnection easyCubeConnection,
         ISecretStore secretStore,
         AgentSettings settings,
         IClock clock,
@@ -129,6 +144,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _heartbeat = heartbeat;
         _outbox = outbox;
         _easyCubeClient = easyCubeClient;
+        _easyCubeConnection = easyCubeConnection;
         _secretStore = secretStore;
         _settings = settings;
         _debouncer = new ScanDebouncer(clock);
@@ -137,15 +153,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _engine.StateChanged += OnEngineStateChanged;
         _heartbeat.StateChanged += OnHeartbeatStateChanged;
+        _easyCubeConnection.StateChanged += OnEasyCubeConnectionStateChanged;
+        _easyCubeConnection.MeasurementReceived += OnDeviceMeasurementReceivedAsync;
 
         _queueCountTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _queueCountTimer.Tick += async (_, _) => await RefreshQueueCountAsync();
         _queueCountTimer.Start();
 
+        // The periodic HTTP health poll only matters for the OPTIONAL
+        // fallback path now — the primary "EasyCube Cihazı" tile is driven
+        // by the persistent TCP connection's own StateChanged event instead
+        // (see OnEasyCubeConnectionStateChanged), not a poll.
         _easyCubeHealthTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
-        _easyCubeHealthTimer.Tick += async (_, _) => await RefreshEasyCubeHealthAsync();
-        _easyCubeHealthTimer.Start();
-        _ = RefreshEasyCubeHealthAsync(); // check once immediately at startup, don't wait 15s
+        _easyCubeHealthTimer.Tick += async (_, _) => await RefreshEasyCubeFallbackHealthAsync();
+        if (EasyCubeFallbackConfigured)
+        {
+            _easyCubeHealthTimer.Start();
+            _ = RefreshEasyCubeFallbackHealthAsync();
+        }
     }
 
     private void OnEngineStateChanged(AgentWorkflowState state) =>
@@ -154,6 +179,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void OnHeartbeatStateChanged(StationConnectionState _) =>
         _dispatcher.Invoke(() => { Raise(nameof(StationStatusText)); Raise(nameof(LastHeartbeatAt)); });
 
+    private void OnEasyCubeConnectionStateChanged(EasyCubeConnectionState _) =>
+        _dispatcher.Invoke(() => Raise(nameof(EasyCubeStatusText)));
+
     private async Task RefreshQueueCountAsync()
     {
         var count = await _outbox.CountPendingAsync(CancellationToken.None);
@@ -161,25 +189,44 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// Clear Turkish status for the EasyCube link — this is what makes "device
-    /// not found" understandable to a non-technical operator instead of a
-    /// silent failure only visible when a barcode is next scanned.
+    /// PRIMARY entry point — invoked automatically whenever EasyCube pushes a
+    /// combined barcode+measurement record over the TCP connection. No
+    /// operator action required: the barcode scanner is wired into EasyCube
+    /// itself, not the PC. Runs on whatever thread the TCP read loop is on,
+    /// so every UI-bound update is marshalled through the Dispatcher.
     /// </summary>
-    private async Task RefreshEasyCubeHealthAsync()
+    private async Task OnDeviceMeasurementReceivedAsync(CapturedMeasurement measurement, CancellationToken ct)
+    {
+        var result = await _engine.HandleDeviceMeasurementAsync(measurement, ct);
+        _dispatcher.Invoke(() =>
+        {
+            CurrentOrder = result.Order;
+            LastMeasurementSummary = Describe(result.Outcome);
+        });
+        await RefreshQueueCountAsync();
+    }
+
+    /// <summary>
+    /// Clear Turkish status for the OPTIONAL HTTP fallback link only — the
+    /// primary EasyCube status comes from the TCP connection's own
+    /// StateChanged event, not this poll. Never runs if no fallback address
+    /// is configured (the common case now that TCP push is the default).
+    /// </summary>
+    private async Task RefreshEasyCubeFallbackHealthAsync()
     {
         var result = await _easyCubeClient.GetDeviceInfoAsync(CancellationToken.None);
         var (text, model, version) = result switch
         {
-            DeviceHealth h => ($"Bağlı ({h.Info!.DeviceModel})", h.Info.DeviceModel, h.Info.SoftwareVersion),
-            EasyCubeResult.Unreachable => ("Bulunamadı — cihaz adresini ve ağ bağlantısını kontrol edin", (string?)null, (string?)null),
-            EasyCubeResult.Timeout => ("Zaman aşımı — cihaz yanıt vermiyor", (string?)null, (string?)null),
-            EasyCubeResult.DeviceError err => ($"Cihaz hatası: {err.Message}", (string?)null, (string?)null),
-            EasyCubeResult.MalformedResponse => ("Cihazdan beklenmeyen yanıt alındı", (string?)null, (string?)null),
+            DeviceHealth h => ($"Yedek (HTTP) bağlı ({h.Info!.DeviceModel})", h.Info.DeviceModel, h.Info.SoftwareVersion),
+            EasyCubeResult.Unreachable => ("Yedek (HTTP) bulunamadı", (string?)null, (string?)null),
+            EasyCubeResult.Timeout => ("Yedek (HTTP) zaman aşımı", (string?)null, (string?)null),
+            EasyCubeResult.DeviceError err => ($"Yedek (HTTP) cihaz hatası: {err.Message}", (string?)null, (string?)null),
+            EasyCubeResult.MalformedResponse => ("Yedek (HTTP) beklenmeyen yanıt", (string?)null, (string?)null),
             _ => ("Bilinmiyor", (string?)null, (string?)null),
         };
         _dispatcher.Invoke(() =>
         {
-            EasyCubeStatusText = text;
+            EasyCubeFallbackStatusText = text;
             EasyCubeDeviceModel = model;
             EasyCubeSoftwareVersion = version;
         });
@@ -234,6 +281,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         MeasureOutcome.EasyCubeFailure f => $"EasyCube cihazı bulunamadı veya yanıt vermiyor: {f.Reason}",
         MeasureOutcome.CorrelationRejected c => $"Doğrulama reddedildi: {c.Reason}",
         MeasureOutcome.Rejected r => $"Reddedildi: {r.Reason}",
+        MeasureOutcome.LookupFailed l => $"Gönderi bulunamadı: {DescribeLookupFailure(l.Reason)}",
         _ => "Bilinmeyen sonuç",
     };
 
@@ -246,8 +294,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             StationStatusText,
             LastHeartbeatAt,
             _secretStore,
-            _settings.EasyCubeBaseUrl,
+            $"{_settings.EasyCubeTcpHost}:{_settings.EasyCubeTcpPort}",
             EasyCubeStatusText,
+            _settings.EasyCubeBaseUrl,
+            EasyCubeFallbackStatusText,
             EasyCubeDeviceModel,
             EasyCubeSoftwareVersion,
             _settings.DeviceId,
@@ -263,5 +313,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _easyCubeHealthTimer.Stop();
         _engine.StateChanged -= OnEngineStateChanged;
         _heartbeat.StateChanged -= OnHeartbeatStateChanged;
+        _easyCubeConnection.StateChanged -= OnEasyCubeConnectionStateChanged;
+        _easyCubeConnection.MeasurementReceived -= OnDeviceMeasurementReceivedAsync;
     }
 }
