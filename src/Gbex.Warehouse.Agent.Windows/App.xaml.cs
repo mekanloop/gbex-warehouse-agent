@@ -57,7 +57,14 @@ public partial class App : Application
         builder.Services.AddSingleton<IClock, SystemClock>();
         builder.Services.AddSingleton<ISecretStore>(new DpapiSecretStore(appDataDir));
         builder.Services.AddSingleton<IIdempotencyKeyGenerator, GuidIdempotencyKeyGenerator>();
-        builder.Services.AddSingleton(sp => new MeasurementCorrelationValidator(sp.GetRequiredService<IClock>()));
+        // Real EasyCube units in the field do not reliably keep accurate
+        // time (no battery-backed RTC, no confirmed NTP sync) — a physical
+        // pilot measured several minutes of drift that did not fully
+        // resolve even after the operator corrected the device clock. The
+        // class default (30s) assumes a well-synced device; 15 minutes
+        // still catches a genuinely stale/replayed "last measurement" while
+        // tolerating realistic field clock drift.
+        builder.Services.AddSingleton(sp => new MeasurementCorrelationValidator(sp.GetRequiredService<IClock>(), TimeSpan.FromMinutes(15)));
         builder.Services.AddSingleton<IEvidenceImageStore>(sp =>
             new TemporaryImageStore(Path.Combine(appDataDir, "evidence-temp"), sp.GetRequiredService<ILogger<TemporaryImageStore>>()));
         builder.Services.AddSingleton<IOutboxStore>(sp =>
