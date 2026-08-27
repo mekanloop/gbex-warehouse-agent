@@ -18,10 +18,18 @@ public abstract record LookupOutcome
     public sealed record StationDisabled : LookupOutcome;
 }
 
+/// <summary>Distinguishes "nothing to upload" from "upload failed, retrying" — collapsing both into one bool would let the UI claim a retry is queued when no image was ever available at all.</summary>
+public enum EvidenceOutcome
+{
+    Uploaded,
+    QueuedForRetry,
+    Unavailable,
+}
+
 public abstract record MeasureOutcome
 {
     public sealed record Pass(string MeasurementId) : MeasureOutcome;
-    public sealed record Mismatch(string MeasurementId, bool EvidenceUploaded) : MeasureOutcome;
+    public sealed record Mismatch(string MeasurementId, EvidenceOutcome Evidence) : MeasureOutcome;
     public sealed record QueuedOffline(string Reason) : MeasureOutcome;
     public sealed record EasyCubeFailure(string Reason) : MeasureOutcome;
     public sealed record CorrelationRejected(CorrelationResult Reason) : MeasureOutcome;
@@ -288,10 +296,26 @@ public sealed class WarehouseWorkflowEngine
             return new MeasureOutcome.Pass(result.MeasurementId);
         }
 
-        // MISMATCH: upload evidence once, confirm, then delete. If the
-        // upload itself fails, the durable outbox owns the retry — this
-        // method does not loop or block on it.
-        var evidenceUploaded = false;
+        // MISMATCH: the TCP push flow carries no image at all (the
+        // manufacturer's protocol has no image field on a measurement
+        // record — see EasyCubeProtocolZeroParser's doc). If evidence is
+        // required and we don't already have one, opportunistically fetch
+        // it now via the OPTIONAL HTTP fallback link, correlated by the
+        // same PackageNumber (/alibi/{n} — the same "re-fetch by package
+        // number" endpoint the manual fallback path already relies on).
+        // This is the one place the HTTP link is used from the PRIMARY
+        // flow, not just the keyboard-wedge fallback — it fails silently
+        // (Unavailable) if the HTTP address isn't configured or the device
+        // doesn't answer, never blocking the mismatch result itself.
+        if (result.RequiresEvidence && imageHandle is null && !string.IsNullOrWhiteSpace(submission.PackageNumber))
+        {
+            imageHandle = await TryFetchEvidenceImageAsync(submission.PackageNumber, ct);
+        }
+
+        // Upload evidence once, confirm, then delete. If the upload itself
+        // fails, the durable outbox owns the retry — this method does not
+        // loop or block on it.
+        var evidence = EvidenceOutcome.Unavailable;
         if (result.RequiresEvidence && imageHandle is not null)
         {
             var evidenceKey = _keyGenerator.NewKey();
@@ -302,11 +326,12 @@ public sealed class WarehouseWorkflowEngine
                 if (uploadResult is EvidenceUploadOutcome)
                 {
                     await _imageStore.DeleteAsync(imageHandle, ct);
-                    evidenceUploaded = true;
+                    evidence = EvidenceOutcome.Uploaded;
                 }
                 else if (uploadResult is GbexApiResult.TransientFailure)
                 {
                     await EnqueueEvidenceRetryAsync(submission.Barcode, result.MeasurementId, imageHandle, evidenceKey, ct);
+                    evidence = EvidenceOutcome.QueuedForRetry;
                 }
                 else
                 {
@@ -317,11 +342,33 @@ public sealed class WarehouseWorkflowEngine
             {
                 _logger.LogError(ex, "Evidence upload threw for measurement {MeasurementId}", result.MeasurementId);
                 await EnqueueEvidenceRetryAsync(submission.Barcode, result.MeasurementId, imageHandle, evidenceKey, ct);
+                evidence = EvidenceOutcome.QueuedForRetry;
             }
         }
 
         SetState(AgentWorkflowState.OnHoldMismatch);
-        return new MeasureOutcome.Mismatch(result.MeasurementId, evidenceUploaded);
+        return new MeasureOutcome.Mismatch(result.MeasurementId, evidence);
+    }
+
+    /// <summary>Best-effort fetch of a mismatch's evidence image via the optional HTTP fallback client — never throws, returns null on any failure (unreachable device, HTTP not configured, malformed response, or no image on that package number).</summary>
+    private async Task<string?> TryFetchEvidenceImageAsync(string packageNumber, CancellationToken ct)
+    {
+        try
+        {
+            var capture = await _easyCubeClient.GetByPackageNumberAsync(packageNumber, ct);
+            if (capture is not MeasurementOutcome outcome || string.IsNullOrEmpty(outcome.Measurement?.ImageBase64))
+            {
+                return null;
+            }
+
+            var bytes = Convert.FromBase64String(outcome.Measurement.ImageBase64);
+            return await _imageStore.SaveTemporaryAsync(bytes, "image/jpeg", ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not fetch evidence image via HTTP fallback for package {PackageNumber}", packageNumber);
+            return null;
+        }
     }
 
     private async Task EnqueueOfflineAsync(StationOrderDto order, MeasurementSubmission submission, string idempotencyKey, string? imageHandle, CancellationToken ct)

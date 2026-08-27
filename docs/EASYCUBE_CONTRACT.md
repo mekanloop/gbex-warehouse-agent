@@ -82,6 +82,20 @@ listener and never issues an `MFR` command itself.
    device's TCP/IP server accepts more than one simultaneous client
    connection. This Agent (and its simulator) assume exactly one.
 
+**No image field.** The `MFR`/`M`/`MAR` records above carry no image data at
+all — images are a separate concern (`I`/`MAI` commands, or the HTTP `/image`
+endpoint below). Because of this, a mismatch measurement that arrives via the
+TCP push has no evidence photo by construction. `WarehouseWorkflowEngine`
+handles this by opportunistically calling the OPTIONAL HTTP fallback client's
+`GetByPackageNumberAsync` (`/alibi/{packageNumber}`, which DOES return
+`ImgBase64`) using the same `PackageNumber` the TCP push reported, the moment
+the backend confirms evidence is actually required. If the HTTP link isn't
+configured or the device doesn't answer, the mismatch still succeeds — the
+result just reports `EvidenceOutcome.Unavailable` instead of a photo, never
+blocking on it. Practically: **a mismatch's evidence photo only exists if
+BOTH the TCP link (primary) AND the HTTP link (fallback) are configured for
+the same physical device.**
+
 ## EasyCube Web API (OPTIONAL FALLBACK — HTTP)
 
 ## Endpoints used

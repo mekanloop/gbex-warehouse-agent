@@ -55,7 +55,7 @@
   Ayar ekranında <b>"EasyCube IP Adresi ve TCP Portu (Ana Bağlantı)"</b> bölümüne, EasyCube cihazının ağ üzerindeki IP adresini ve portunu girin (örn. <code>192.168.1.50</code> / <code>9990</code>) — bu bilgiyi cihazın kurulumunu yapan teknisyenden alabilirsiniz.<br>
   Girdikten sonra yanındaki <b>"Bağlantıyı Test Et"</b> düğmesine basın (bkz. Bölüm 6).
   <div class="warn">
-    <b>"EasyCube HTTP Adresi (Yalnızca Yedek)"</b> alanı normal kullanımda BOŞ bırakılabilir — yalnızca barkod okuyucu bilgisayara takılıysa ve elle barkod girişi kullanılacaksa doldurulur.
+    <b>"EasyCube HTTP Adresi"</b> alanını da doldurun (aynı IP, farklı port — genelde <code>8080</code>). Bu alan boş kalırsa, bir uyumsuzluk (BEKLEMEDE) durumunda EasyCube'un çektiği fotoğraf GBEX'e gönderilemez — ölçümün kendisi yine de kaydedilir, yalnızca fotoğraf eksik kalır.
   </div>
 </div>
 
@@ -66,7 +66,7 @@
     <li>Gönderiyi EasyCube'un altına/önüne yerleştirin ve barkodunu EasyCube'a takılı el okuyucusuyla okutun.</li>
     <li>EasyCube, barkodu ve ölçümü (ağırlık, uzunluk, genişlik, yükseklik) birlikte otomatik olarak Depo Ajanı'na gönderir.</li>
     <li>Sistem gönderiyi bulur, beyan edilen ağırlık/ölçüleri gösterir ve karşılaştırmayı otomatik yapar.</li>
-    <li>Sonuç ekranda görünür: <b>"UYGUN"</b> (ölçüm doğrulandı) veya <b>"BEKLEMEDE"</b> (fark tespit edildi, bir GBEX operatörünün incelemesi gerekir).</li>
+    <li>Sonuç ekranda görünür: <b>"UYGUN"</b> (ölçüm doğrulandı) veya <b>"BEKLEMEDE"</b> (fark tespit edildi — EasyCube HTTP adresi girildiyse kanıt fotoğrafı da otomatik gönderilir, bir GBEX operatörünün incelemesi gerekir).</li>
   </ol>
   <div class="step" style="background:#eef2ff;">
     <b>Yedek yöntem:</b> Barkod okuyucu bilgisayara takılıysa, ana ekrandaki <b>"Yedek — barkodu elle gir"</b> kutusuna barkodu okutup/yazıp <b>Enter</b>'a basabilirsiniz. Bu yalnızca EasyCube'un otomatik gönderimi çalışmadığında kullanılmalıdır.

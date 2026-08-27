@@ -132,7 +132,7 @@ public class EndToEndWorkflowTests : IAsyncLifetime
         // --- captured mismatch measurement -> submit with Idempotency-Key ---
         var firstSubmit = await engine.MeasureAndSubmitAsync(found.Order, CancellationToken.None);
         var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(firstSubmit);
-        Assert.True(mismatch.EvidenceUploaded);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
         Assert.Equal(AgentWorkflowState.OnHoldMismatch, engine.State);
 
         // Exactly one measurement call and one evidence upload happened.

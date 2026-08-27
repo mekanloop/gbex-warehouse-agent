@@ -148,7 +148,7 @@ public class WarehouseWorkflowEngineTests
         var result = await engine.MeasureAndSubmitAsync(Order(), CancellationToken.None);
 
         var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result);
-        Assert.True(mismatch.EvidenceUploaded);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
         Assert.Equal(AgentWorkflowState.OnHoldMismatch, engine.State);
         fx.ImageStore.Verify(s => s.DeleteAsync("temp/handle.jpg", It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -172,7 +172,7 @@ public class WarehouseWorkflowEngineTests
         var result = await engine.MeasureAndSubmitAsync(Order(), CancellationToken.None);
 
         var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result);
-        Assert.False(mismatch.EvidenceUploaded);
+        Assert.Equal(EvidenceOutcome.QueuedForRetry, mismatch.Evidence);
         // NOT deleted — the durable outbox owns it now.
         fx.ImageStore.Verify(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         fx.Outbox.Verify(o => o.EnqueueAsync(It.Is<NewOutboxItem>(i => i.OperationType == OutboxOperationType.UploadEvidence && i.EvidenceFilePath == "temp/handle.jpg"), It.IsAny<CancellationToken>()), Times.Once);
@@ -314,5 +314,62 @@ public class WarehouseWorkflowEngineTests
         var rejected = Assert.IsType<MeasureOutcome.CorrelationRejected>(second.Outcome);
         Assert.IsType<CorrelationResult.PackageNumberAlreadyUsed>(rejected.Reason);
         fx.GbexClient.Verify(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // --- Mismatch evidence photo for the device-push flow: the TCP protocol
+    // carries no image at all, so a mismatch's evidence photo (when
+    // required) must come from an opportunistic fetch via the OPTIONAL HTTP
+    // fallback client, correlated by PackageNumber. ---
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_mismatch_fetches_evidence_via_http_fallback_when_the_push_carried_no_image()
+    {
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-photo-1", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
+        // The device-push measurement itself has NO image (TCP protocol
+        // limitation) — the fallback client is what supplies one, keyed by
+        // the same PackageNumber the push reported.
+        fx.EasyCubeClient.Setup(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(new byte[] { 9, 9, 9 }))));
+        fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("temp/fallback-fetched.jpg");
+        fx.ImageStore.Setup(s => s.ReadAsync("temp/fallback-fetched.jpg", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new byte[] { 9, 9, 9 });
+        fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m-photo-1", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EvidenceUploadOutcome.Ok("https://example/photo.jpg"));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" }; // no ImageBase64
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
+        fx.EasyCubeClient.Verify(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_mismatch_reports_evidence_unavailable_when_the_http_fallback_cannot_supply_a_photo()
+    {
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-photo-2", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
+        // HTTP fallback not configured/reachable — the common case when only
+        // the TCP link is set up.
+        fx.EasyCubeClient.Setup(c => c.GetByPackageNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EasyCubeResult.Unreachable("ConnectFailure"));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
+        Assert.Equal(EvidenceOutcome.Unavailable, mismatch.Evidence);
+        // No image was ever obtained — nothing to enqueue a retry for.
+        fx.Outbox.Verify(o => o.EnqueueAsync(It.Is<NewOutboxItem>(i => i.OperationType == OutboxOperationType.UploadEvidence), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

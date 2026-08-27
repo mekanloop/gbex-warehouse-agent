@@ -39,9 +39,9 @@
         </Grid>
         <TextBlock x:Name="EasyCubeTcpTestResultText" Margin="0,0,0,8" TextWrapping="Wrap" FontSize="12" />
 
-        <TextBlock Text="EasyCube HTTP Adresi (Yalnızca Yedek — Opsiyonel)" FontWeight="Bold" Margin="0,4,0,0" />
+        <TextBlock Text="EasyCube HTTP Adresi (Yedek Bağlantı ve Uyuşmazlık Fotoğrafı)" FontWeight="Bold" Margin="0,4,0,0" />
         <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="Gray"
-                   Text="Yalnızca barkod okuyucu PC'ye takılıysa ve elle barkod girişi kullanılacaksa doldurun. Normal kullanımda boş bırakılabilir. Örnek: http://192.168.1.50:8080" />
+                   Text="Barkod okuyucu PC'ye takılıysa elle barkod girişi için, HER İKİ DURUMDA da bir uyumsuzluk tespit edildiğinde EasyCube'un çektiği fotoğrafı almak için kullanılır. Doldurulmazsa uyumsuzluk anında fotoğraf gönderilmez, ölçüm yine de kaydedilir. Örnek: http://192.168.1.50:8080" />
         <Grid Margin="0,4,0,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />

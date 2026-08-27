@@ -276,13 +276,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private static string Describe(MeasureOutcome outcome) => outcome switch
     {
         MeasureOutcome.Pass p => $"UYGUN — Ölçüm: {p.MeasurementId}",
-        MeasureOutcome.Mismatch m => $"UYUMSUZ — Ölçüm: {m.MeasurementId} (Kanıt yüklendi: {(m.EvidenceUploaded ? "Evet" : "Hayır, kuyrukta")})",
+        MeasureOutcome.Mismatch m => $"UYUMSUZ — Ölçüm: {m.MeasurementId} (Kanıt fotoğrafı: {DescribeEvidence(m.Evidence)})",
         MeasureOutcome.QueuedOffline q => $"Çevrimdışı: {q.Reason}",
         MeasureOutcome.EasyCubeFailure f => $"EasyCube cihazı bulunamadı veya yanıt vermiyor: {f.Reason}",
         MeasureOutcome.CorrelationRejected c => $"Doğrulama reddedildi: {c.Reason}",
         MeasureOutcome.Rejected r => $"Reddedildi: {r.Reason}",
         MeasureOutcome.LookupFailed l => $"Gönderi bulunamadı: {DescribeLookupFailure(l.Reason)}",
         _ => "Bilinmeyen sonuç",
+    };
+
+    private static string DescribeEvidence(EvidenceOutcome evidence) => evidence switch
+    {
+        EvidenceOutcome.Uploaded => "Yüklendi",
+        EvidenceOutcome.QueuedForRetry => "Yüklenemedi, kuyrukta yeniden denenecek",
+        EvidenceOutcome.Unavailable => "Yok",
+        _ => "Bilinmiyor",
     };
 
     /// <summary>Builds and writes the sanitized diagnostics report — see DiagnosticsReportBuilder for exactly what it does and does not contain.</summary>
