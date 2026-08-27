@@ -141,10 +141,18 @@ the same physical device.**
 }
 ```
 
-**"PackageLenght" (not "Length") is the device's real spelling.** GBEX's own
-`EasyCubeMeasurementResponse` DTO preserves it exactly via
-`[JsonPropertyName("PackageLenght")]` — silently "fixing" it would break
-deserialization against the physical hardware.
+**"PackageLenght" (not "Length") is the device's documented spelling — but
+NOT universal.** A real EasyCube unit (2026-08-27 physical pilot) was
+observed returning the CORRECTLY spelled `"PackageLength"` /
+`"PackageLengthUnit"` instead — spelling apparently varies by firmware/unit,
+contradicting the guide's own example. `EasyCubeMeasurementResponse` accepts
+BOTH spellings (separate backing fields, whichever the response actually
+populates wins) — before this, an unrecognized spelling silently defaulted
+the length to 0, which then failed unit validation and turned the entire
+response into a `MalformedResponse`, discarding a perfectly good evidence
+photo along with it. If another field is ever found with a similar
+spelling mismatch on a different unit, apply the same dual-property pattern
+rather than trusting the guide's spelling as gospel.
 
 ## Flagged assumptions — VERIFY ON PHYSICAL HARDWARE
 

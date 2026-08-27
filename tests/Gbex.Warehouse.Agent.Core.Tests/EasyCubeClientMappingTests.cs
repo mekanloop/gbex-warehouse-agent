@@ -114,6 +114,29 @@ public class EasyCubeClientMappingTests
         Assert.Contains("camera disconnected", error.Message);
     }
 
+    /// <summary>
+    /// A real EasyCube unit was observed (2026-08-27) returning the
+    /// CORRECTLY spelled "PackageLength"/"PackageLengthUnit" instead of the
+    /// manufacturer's own documented typo — spelling apparently varies by
+    /// firmware/unit. Before this fix, that field silently defaulted to 0,
+    /// which then failed unit validation (0 is OutOfRange) and turned the
+    /// ENTIRE response — including a perfectly good evidence photo — into a
+    /// MalformedResponse. Both spellings must work.
+    /// </summary>
+    [Fact]
+    public async Task CaptureMeasurementAsync_also_accepts_the_correctly_spelled_PackageLength()
+    {
+        var body = RealCapMeasureExample
+            .Replace("\"PackageLenght\": 17.2,", "")
+            .Replace("\"PackageLenghtUnit\": \"cm\",", "\"PackageLength\": 17.2, \"PackageLengthUnit\": \"cm\",");
+        var client = BuildClient(HttpStatusCode.OK, body);
+
+        var result = await client.CaptureMeasurementAsync(CancellationToken.None);
+
+        var ok = Assert.IsType<MeasurementOutcome>(result);
+        Assert.Equal(17.2m, ok.Measurement!.LengthCm);
+    }
+
     [Fact]
     public async Task An_unrecognized_weight_unit_is_rejected_rather_than_silently_misinterpreted()
     {

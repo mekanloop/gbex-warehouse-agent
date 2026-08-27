@@ -19,8 +19,24 @@ public sealed class EasyCubeMeasurementResponse
     [JsonPropertyName("TimeStamp")] public string? TimeStamp { get; set; }
     [JsonPropertyName("PackageHeight")] public double PackageHeight { get; set; }
     [JsonPropertyName("PackageHeightUnit")] public string? PackageHeightUnit { get; set; }
-    [JsonPropertyName("PackageLenght")] public double PackageLenght { get; set; }
-    [JsonPropertyName("PackageLenghtUnit")] public string? PackageLenghtUnit { get; set; }
+    // FLAGGED FINDING (confirmed on real hardware, 2026-08-27): the
+    // manufacturer's guide documents "PackageLenght" (their own typo), and
+    // that is what this codebase originally assumed universally. A real
+    // device's /alibi and /last_cap_measure responses were observed
+    // returning the CORRECTLY spelled "PackageLength" instead — spelling
+    // apparently varies by firmware/unit. Both are accepted; whichever the
+    // response actually contains wins (the other defaults to 0/null and is
+    // ignored). This is exactly why relying on JsonPropertyName alone had
+    // silently turned every real measurement into a MalformedResponse
+    // (length parsed as 0 -> OutOfRange) — including the ones carrying a
+    // perfectly good evidence photo, which got discarded along with it.
+    [JsonPropertyName("PackageLenght")] public double PackageLenghtTypoSpelling { get; set; }
+    [JsonPropertyName("PackageLength")] public double? PackageLengthCorrectSpelling { get; set; }
+    [JsonIgnore] public double PackageLenght => PackageLenghtTypoSpelling != 0 ? PackageLenghtTypoSpelling : (PackageLengthCorrectSpelling ?? 0);
+
+    [JsonPropertyName("PackageLenghtUnit")] public string? PackageLenghtUnitTypoSpelling { get; set; }
+    [JsonPropertyName("PackageLengthUnit")] public string? PackageLengthUnitCorrectSpelling { get; set; }
+    [JsonIgnore] public string? PackageLenghtUnit => PackageLenghtUnitTypoSpelling ?? PackageLengthUnitCorrectSpelling;
     [JsonPropertyName("PackageWidth")] public double PackageWidth { get; set; }
     [JsonPropertyName("PackageWidthUnit")] public string? PackageWidthUnit { get; set; }
     [JsonPropertyName("PackageWeight")] public double PackageWeight { get; set; }
