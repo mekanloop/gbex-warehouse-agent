@@ -1,6 +1,8 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using Gbex.Warehouse.Agent.Windows.ViewModels;
+using Microsoft.Win32;
 
 namespace Gbex.Warehouse.Agent.Windows;
 
@@ -30,5 +32,26 @@ public partial class MainWindow : Window
         var window = _createStationSettingsWindow();
         window.Owner = this;
         window.ShowDialog();
+    }
+
+    private async void ExportDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Tanılama Raporunu Kaydet",
+            Filter = "Metin dosyası (*.txt)|*.txt",
+            FileName = $"gbex-ajan-tanilama-{DateTime.Now:yyyyMMdd-HHmmss}.txt",
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            await _viewModel.ExportDiagnosticsAsync(dialog.FileName);
+            MessageBox.Show(this, "Tanılama raporu kaydedildi. Bu dosyayı destek ekibine gönderebilirsiniz.", "Tanılama Raporu", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "Rapor kaydedilemedi. Farklı bir konum seçip tekrar deneyin.", "Tanılama Raporu", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 }

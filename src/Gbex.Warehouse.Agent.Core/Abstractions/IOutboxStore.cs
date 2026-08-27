@@ -76,5 +76,11 @@ public interface IOutboxStore
 
     Task<int> CountPendingAsync(CancellationToken ct);
 
+    /// <summary>Count of items sitting in one specific terminal-ish state — used by the diagnostics report (e.g. how many need reauthorization or manual resolution right now).</summary>
+    Task<int> CountByStateAsync(OutboxItemState state, CancellationToken ct);
+
+    /// <summary>Most recent sanitized error strings across every item, newest first — for the diagnostics export only. Never returns SanitizedPayloadJson or anything else that could carry customer facts beyond what was already in a submission.</summary>
+    Task<IReadOnlyList<string>> GetRecentSanitizedErrorsAsync(int limit, CancellationToken ct);
+
     Task<OutboxItem?> FindByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct);
 }

@@ -10,12 +10,16 @@ on:
 permissions:
   contents: read
 
+env:
+  PILOT_VERSION: "1.0.0"
+
 jobs:
   build-test-publish:
-    # Windows runner — required to compile and publish the WPF project.
-    # Everything (Core, Infrastructure, simulator, both test projects, AND
-    # the Windows/WPF app) builds and runs here in one job, since only a
-    # Windows runner can do all of it.
+    # Windows runner — required to compile and publish the WPF project,
+    # and Inno Setup (preinstalled on this image) to build the installer.
+    # Everything (Core, Infrastructure, simulator, both test projects, the
+    # Windows/WPF app, and the installer) builds and runs here in one job,
+    # since only a Windows runner can do all of it.
     runs-on: windows-latest
 
     steps:
@@ -57,11 +61,28 @@ jobs:
           --runtime win-x64
           --self-contained true
           -p:PublishSingleFile=false
+          -p:Version=${{ env.PILOT_VERSION }}
           --output publish/GbexWarehouseAgent
 
-      - name: Upload Windows artifact
+      - name: Upload Windows artifact (raw publish folder)
         uses: actions/upload-artifact@v4
         with:
           name: GbexWarehouseAgent-win-x64
           path: publish/GbexWarehouseAgent/**
+          if-no-files-found: error
+
+      - name: Build user-friendly installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup (ISCC.exe) not found at the expected preinstalled path on windows-latest: $iscc"
+          }
+          & $iscc "/DAppVersion=$env:PILOT_VERSION" installer\setup.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GbexWarehouseAgentSetup
+          path: installer-output/GbexWarehouseAgentSetup.exe
           if-no-files-found: error

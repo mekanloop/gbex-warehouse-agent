@@ -207,6 +207,36 @@ public sealed class SqliteOutboxStore : IOutboxStore, IDisposable
         return Convert.ToInt32(result);
     }
 
+    public async Task<int> CountByStateAsync(OutboxItemState state, CancellationToken ct)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM OutboxItems WHERE State = $state;";
+        command.Parameters.AddWithValue("$state", state.ToString());
+        var result = await command.ExecuteScalarAsync(ct);
+        return Convert.ToInt32(result);
+    }
+
+    public async Task<IReadOnlyList<string>> GetRecentSanitizedErrorsAsync(int limit, CancellationToken ct)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT LastSanitizedError FROM OutboxItems
+            WHERE LastSanitizedError IS NOT NULL
+            ORDER BY Id DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", limit);
+        var results = new List<string>();
+        using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            results.Add(reader.GetString(0));
+        }
+        return results;
+    }
+
     public async Task<OutboxItem?> FindByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct)
     {
         using var connection = OpenConnection();

@@ -5,6 +5,7 @@ obj/
 .vscode/
 TestResults/
 publish/
+installer-output/
 *.db
 *.db-shm
 *.db-wal

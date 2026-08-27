@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>GBEX Depo Ajanı — Kurulum ve Test Kılavuzu</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; max-width: 800px; margin: 32px auto; padding: 0 16px; color: #1a1a1a; line-height: 1.5; }
+  h1 { font-size: 26px; border-bottom: 3px solid #190A3C; padding-bottom: 8px; }
+  h2 { font-size: 19px; color: #190A3C; margin-top: 32px; border-left: 4px solid #FFED00; padding-left: 10px; }
+  .step { background: #f7f7f9; border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+  .step b { color: #190A3C; }
+  .warn { background: #fff8e1; border-left: 4px solid #f5a623; padding: 10px 14px; border-radius: 4px; }
+  .ok { background: #eaf7ea; border-left: 4px solid #2e7d32; padding: 10px 14px; border-radius: 4px; }
+  code { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  ol, ul { padding-left: 22px; }
+  footer { margin-top: 40px; font-size: 12px; color: #777; border-top: 1px solid #ddd; padding-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>GBEX Depo Ajanı — Kurulum ve Test Kılavuzu</h1>
+<p>Bu kılavuz, teknik bilgi gerektirmeden GBEX Depo Ajanı'nı kurup ilk testlerini yapmanız içindir.</p>
+
+<h2>1. Kurulum</h2>
+<div class="step">
+  <b>GbexWarehouseAgentSetup.exe</b> dosyasını depo bilgisayarına indirin ve çift tıklayın.<br>
+  Kurulum ekranında dilerseniz <b>"Masaüstü kısayolu oluştur"</b> kutucuğunu işaretleyin, ardından <b>İleri</b> ve <b>Kur</b>'a tıklayın.<br>
+  Kurulum bitince Başlat menüsünde ve (işaretlediyseniz) masaüstünde <b>"GBEX Depo Ajanı"</b> simgesi görünür.
+</div>
+
+<h2>2. İlk Açılış — İstasyon Anahtarının Girilmesi</h2>
+<div class="step">
+  Programı ilk açtığınızda karşınıza <b>ayar ekranı</b> otomatik olarak gelir. Şu bilgileri girin:
+  <ul>
+    <li><b>GBEX Sunucu Adresi</b> — GBEX yöneticinizin size verdiği adres (örn. <code>https://app.gbex.com.tr</code>)</li>
+    <li><b>İstasyon Anahtarı</b> — yine GBEX yöneticinizden aldığınız, tek kullanımlık şifre benzeri kod. Bu kodu bir kez yapıştırıp kaydettikten sonra program bir daha bu kodu size göstermez — bu normaldir, güvenlik içindir.</li>
+  </ul>
+  <div class="warn">İstasyon anahtarını kimseyle paylaşmayın. Yanlışlıkla kaybederseniz GBEX yöneticinizden yeni bir anahtar isteyin.</div>
+</div>
+
+<h2>3. EasyCube Cihazının Bağlanması</h2>
+<div class="step">
+  Aynı ekranda <b>EasyCube Cihaz Adresi</b> kutusuna, ölçüm cihazının yerel ağ adresini girin (örn. <code>http://192.168.1.50:8080</code>) — bu bilgiyi cihazın kurulumunu yapan teknisyenden alabilirsiniz.<br>
+  Ardından her iki alan için de yanlarındaki <b>"Bağlantıyı Test Et"</b> düğmelerine basın (bkz. Bölüm 5).
+</div>
+
+<h2>4. Barkod Okutma</h2>
+<div class="step">
+  <ol>
+    <li>Ana ekrandaki <b>Barkod</b> kutusuna imleç geldiğinde, el barkod okuyucusuyla gönderi barkodunu okutun (veya barkodu klavyeden yazıp <b>Enter</b>'a basın).</li>
+    <li>Sistem gönderiyi bulur, beyan edilen ağırlık/ölçüleri gösterir ve EasyCube cihazından otomatik ölçüm alır.</li>
+    <li>Sonuç ekranda görünür: <b>"UYGUN"</b> (ölçüm doğrulandı) veya <b>"BEKLEMEDE"</b> (fark tespit edildi, bir GBEX operatörünün incelemesi gerekir).</li>
+  </ol>
+  <div class="ok">Fiyatlandırma, onay, ödeme ve kargo değişimi işlemleri bu programda YAPILMAZ — bunlar GBEX web yönetim panelinde yapılır.</div>
+</div>
+
+<h2>5. Bağlantı Testi</h2>
+<div class="step">
+  Ayar ekranındaki her iki <b>"Bağlantıyı Test Et"</b> düğmesi de anında sonuç verir:
+  <ul>
+    <li><b>✓ Başarılı</b> — o sistemle bağlantı çalışıyor.</li>
+    <li><b>✗ Bulunamadı / Ulaşılamadı</b> — adres yanlış olabilir veya cihaz/sunucu kapalı olabilir. Adresi kontrol edin, sorunu çözemiyorsanız Bölüm 6'ya bakın.</li>
+  </ul>
+</div>
+
+<h2>6. Hata Durumunda: Tanılama Raporunun Gönderilmesi</h2>
+<div class="step">
+  Bir sorunla karşılaşırsanız, ana ekrandaki <b>"Tanılama Raporunu Dışa Aktar"</b> düğmesine basın. Bir metin dosyası (.txt) kaydedilir.
+  <div class="ok">Bu rapor istasyon anahtarınızı veya müşteri bilgilerini İÇERMEZ — güvenle e-posta ile gönderebilirsiniz.</div>
+  Bu dosyayı GBEX destek ekibine e-posta ile gönderin; sorunun ne olduğunu bu rapordan anlayabilirler.
+</div>
+
+<h2>Kaldırma</h2>
+<div class="step">
+  Windows'ta <b>Ayarlar → Uygulamalar</b> içinden "GBEX Depo Ajanı"nı bulup kaldırabilir, ya da Başlat menüsündeki "GBEX Depo Ajanı" klasöründeki <b>Kaldır</b> kısayolunu kullanabilirsiniz.
+</div>
+
+<footer>
+  GBEX Depo Ajanı — Pilot Sürüm. Bu kılavuz, gerçek EasyCube donanımı ve fiziksel Windows depo bilgisayarında doğrulanmayı beklemektedir; ekrandaki metinler ve adımlar bu sürümde test ortamında doğrulanmıştır.
+</footer>
+
+</body>
+</html>

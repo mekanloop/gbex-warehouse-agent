@@ -5,6 +5,7 @@ using Gbex.Warehouse.Agent.Core.Abstractions;
 using Gbex.Warehouse.Agent.Core.Correlation;
 using Gbex.Warehouse.Agent.Core.Idempotency;
 using Gbex.Warehouse.Agent.Core.Workflow;
+using Gbex.Warehouse.Agent.Infrastructure.Configuration;
 using Gbex.Warehouse.Agent.Infrastructure.EasyCube;
 using Gbex.Warehouse.Agent.Infrastructure.Evidence;
 using Gbex.Warehouse.Agent.Infrastructure.Gbex;
@@ -103,6 +104,9 @@ public partial class App : Application
             sp.GetRequiredService<WarehouseWorkflowEngine>(),
             sp.GetRequiredService<HeartbeatService>(),
             sp.GetRequiredService<IOutboxStore>(),
+            sp.GetRequiredService<IEasyCubeClient>(),
+            sp.GetRequiredService<ISecretStore>(),
+            sp.GetRequiredService<AgentSettings>(),
             sp.GetRequiredService<IClock>(),
             AgentVersion));
         builder.Services.AddTransient<StationSettingsWindow>();
@@ -112,6 +116,20 @@ public partial class App : Application
 
         _host = builder.Build();
         _host.Start();
+
+        // First run: a non-technical operator has never configured the
+        // Agent. Show the settings window FIRST, with a welcoming banner,
+        // instead of a bare main window with a hard-to-find settings
+        // button. Re-shown every launch until BOTH the station secret and
+        // the required addresses are actually saved.
+        var secretStore = _host.Services.GetRequiredService<ISecretStore>();
+        var hasSecret = secretStore.HasStationSecretAsync(CancellationToken.None).GetAwaiter().GetResult();
+        if (!settings.IsConfigured || !hasSecret)
+        {
+            var firstRunSettings = _host.Services.GetRequiredService<StationSettingsWindow>();
+            firstRunSettings.IsFirstRun = true;
+            firstRunSettings.ShowDialog();
+        }
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();

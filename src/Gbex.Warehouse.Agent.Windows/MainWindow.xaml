@@ -22,21 +22,28 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="0,0,4,0">
                 <StackPanel>
                     <TextBlock Text="GBEX Bağlantısı" FontWeight="Bold" />
-                    <TextBlock Text="{Binding StationStatusText}" />
+                    <TextBlock Text="{Binding StationStatusText}" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding LastHeartbeatAt, StringFormat='Son nabız: {0:HH:mm:ss}'}" FontSize="11" Foreground="Gray" />
                 </StackPanel>
             </Border>
             <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,4,0">
                 <StackPanel>
+                    <TextBlock Text="EasyCube Cihazı" FontWeight="Bold" />
+                    <TextBlock Text="{Binding EasyCubeStatusText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,4,0">
+                <StackPanel>
                     <TextBlock Text="İş Akışı Durumu" FontWeight="Bold" />
                     <TextBlock Text="{Binding WorkflowStatusText}" FontSize="14" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
-            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,0,0">
+            <Border Grid.Column="3" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,0,0">
                 <StackPanel>
                     <TextBlock Text="Çevrimdışı Kuyruk" FontWeight="Bold" />
                     <TextBlock Text="{Binding OfflineQueueCount}" FontSize="18" />
@@ -76,6 +83,7 @@
                    Text="Barkodu okutup Enter'a basın. Fiyatlandırma, onay, cüzdan ve gönderi değişimi işlemleri web yönetim panelinde yapılır." />
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Tanılama Raporunu Dışa Aktar" Padding="8,4" Margin="0,0,8,0" Click="ExportDiagnostics_Click" />
             <Button Content="İstasyon Ayarları" Padding="8,4" Click="StationSettings_Click" />
         </StackPanel>
     </Grid>

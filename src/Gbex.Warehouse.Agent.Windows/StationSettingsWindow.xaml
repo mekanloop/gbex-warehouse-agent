@@ -1,28 +1,49 @@
 <Window x:Class="Gbex.Warehouse.Agent.Windows.StationSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="İstasyon Ayarları" Height="420" Width="480" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        Title="İstasyon Ayarları" Height="560" Width="520" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
     <StackPanel Margin="16">
-        <TextBlock Text="GBEX API Adresi" FontWeight="Bold" />
-        <TextBox x:Name="GbexBaseUrlBox" Margin="0,4,0,12" />
+        <TextBlock x:Name="WelcomeText" FontSize="14" FontWeight="Bold" Foreground="#2E7D32" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"
+                   Text="Kuruluma hoş geldiniz. Devam etmek için aşağıdaki bilgileri girip 'Kaydet' butonuna basın." />
 
-        <TextBlock Text="EasyCube Cihaz Adresi (yerel ağ)" FontWeight="Bold" />
-        <TextBox x:Name="EasyCubeBaseUrlBox" Margin="0,4,0,12" />
+        <TextBlock Text="GBEX Sunucu Adresi" FontWeight="Bold" />
+        <TextBlock Text="Örnek: https://app.gbex.com.tr" FontSize="11" Foreground="Gray" />
+        <Grid Margin="0,4,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="GbexBaseUrlBox" Grid.Column="0" Margin="0,0,8,0" />
+            <Button Grid.Column="1" Content="Bağlantıyı Test Et" Padding="8,4" Click="TestGbexConnection_Click" />
+        </Grid>
+        <TextBlock x:Name="GbexTestResultText" Margin="0,0,0,8" TextWrapping="Wrap" FontSize="12" />
+
+        <TextBlock Text="Tek Kullanımlık İstasyon Anahtarı" FontWeight="Bold" Margin="0,4,0,0" />
+        <TextBlock x:Name="SecretStatusText" FontSize="11" Foreground="Gray" />
+        <TextBlock Text="GBEX yöneticinizden aldığınız anahtarı buraya yapıştırın. Kaydettikten sonra bir daha görüntülenmez." TextWrapping="Wrap" FontSize="11" Foreground="Gray" Margin="0,0,0,4" />
+        <PasswordBox x:Name="StationSecretBox" Margin="0,0,0,12" />
+
+        <TextBlock Text="EasyCube Cihaz Adresi / Portu" FontWeight="Bold" />
+        <TextBlock Text="Örnek: http://192.168.1.50:8080" FontSize="11" Foreground="Gray" />
+        <Grid Margin="0,4,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="EasyCubeBaseUrlBox" Grid.Column="0" Margin="0,0,8,0" />
+            <Button Grid.Column="1" Content="Bağlantıyı Test Et" Padding="8,4" Click="TestEasyCubeConnection_Click" />
+        </Grid>
+        <TextBlock x:Name="EasyCubeTestResultText" Margin="0,0,0,8" TextWrapping="Wrap" FontSize="12" />
 
         <TextBlock Text="Cihaz Kimliği (opsiyonel)" FontWeight="Bold" />
         <TextBox x:Name="DeviceIdBox" Margin="0,4,0,12" />
 
-        <TextBlock x:Name="SecretStatusText" FontWeight="Bold" Margin="0,0,0,4" />
-        <TextBlock Text="Tek kullanımlık istasyon anahtarı (yalnızca ilk kurulumda görünür):" TextWrapping="Wrap" Margin="0,0,0,4" />
-        <PasswordBox x:Name="StationSecretBox" Margin="0,0,0,12" />
-
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="Bağlantıyı Test Et" Padding="8,4" Margin="0,0,8,0" Click="TestConnection_Click" />
             <Button Content="Kimlik Bilgisini Kaldır" Padding="8,4" Margin="0,0,8,0" Click="RemoveCredential_Click" />
-            <Button Content="Kaydet" Padding="8,4" Margin="0,0,8,0" Click="Save_Click" />
+            <Button Content="Kaydet" Padding="16,4" Margin="0,0,8,0" Click="Save_Click" FontWeight="Bold" />
             <Button Content="Kapat" Padding="8,4" Click="Close_Click" />
         </StackPanel>
 
-        <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" />
+        <TextBlock x:Name="ResultText" Margin="0,12,0,0" TextWrapping="Wrap" FontWeight="Bold" />
     </StackPanel>
 </Window>

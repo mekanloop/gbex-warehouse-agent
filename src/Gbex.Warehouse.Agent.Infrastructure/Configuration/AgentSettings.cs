@@ -1,12 +1,13 @@
-using System.IO;
 using System.Text.Json;
 
-namespace Gbex.Warehouse.Agent.Windows;
+namespace Gbex.Warehouse.Agent.Infrastructure.Configuration;
 
 /// <summary>
 /// Non-secret local configuration — everything EXCEPT the station secret,
-/// which lives only in DpapiSecretStore. Plain JSON on disk is fine for
-/// these fields; none of them are sensitive.
+/// which lives only in ISecretStore/DpapiSecretStore. Plain JSON on disk is
+/// fine for these fields; none of them are sensitive. Lives here (not in
+/// the Windows project) because it has no WPF/Windows dependency at all —
+/// keeping it in the cross-platform layer is what makes it unit-testable.
 /// </summary>
 public sealed class AgentSettings
 {
