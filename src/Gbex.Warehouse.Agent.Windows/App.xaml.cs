@@ -85,7 +85,11 @@ public partial class App : Application
         }));
 
         // Optional fallback only — see EasyCubeOptions/AgentSettings.EasyCubeBaseUrl doc.
-        builder.Services.AddHttpClient<IEasyCubeClient, EasyCubeClient>();
+        // ConfigurePrimaryHttpMessageHandler trusts EasyCube's self-signed
+        // HTTPS certificate (see EasyCubeHttpClientFactory) — never applied
+        // to GbexApiClient, which keeps normal certificate validation.
+        builder.Services.AddHttpClient<IEasyCubeClient, EasyCubeClient>()
+            .ConfigurePrimaryHttpMessageHandler(EasyCubeHttpClientFactory.CreateHandler);
         builder.Services.AddSingleton(Options.Create(new EasyCubeOptions
         {
             BaseUrl = string.IsNullOrWhiteSpace(settings.EasyCubeBaseUrl) ? "http://localhost:8080" : settings.EasyCubeBaseUrl,

@@ -176,7 +176,7 @@ public partial class StationSettingsWindow : Window
         try
         {
             var options = Options.Create(new EasyCubeOptions { BaseUrl = baseUrl });
-            var client = new EasyCubeClient(new HttpClient(), options, _loggerFactory.CreateLogger<EasyCubeClient>());
+            var client = new EasyCubeClient(new HttpClient(EasyCubeHttpClientFactory.CreateHandler()), options, _loggerFactory.CreateLogger<EasyCubeClient>());
             var result = await client.GetDeviceInfoAsync(CancellationToken.None);
 
             EasyCubeTestResultText.Text = result switch
