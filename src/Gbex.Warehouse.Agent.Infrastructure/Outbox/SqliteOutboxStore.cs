@@ -24,7 +24,19 @@ public sealed class SqliteOutboxStore : IOutboxStore, IDisposable
 
     public SqliteOutboxStore(string databasePath, IClock clock, ILogger<SqliteOutboxStore> logger)
     {
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString();
+        // Pooling=false: each OpenConnection() call does a real open/close,
+        // so the underlying OS file handle is released the instant a
+        // connection is disposed — no reliance on ClearAllPools() being
+        // called at the right moment. This outbox is a low-throughput,
+        // one-operation-at-a-time path, so the extra open/close cost is
+        // negligible. Found via a REAL Windows CI failure: pooled
+        // connections kept station.secret's sibling outbox.db locked after
+        // disposal, so a second store instance opened against the same
+        // path (e.g. after an app "restart") — or simply cleaning up a test
+        // temp directory — hit "the process cannot access the file" on
+        // Windows. Never reproduced on macOS/Linux, where file deletion
+        // doesn't require the last handle to be closed first.
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
         _clock = clock;
         _logger = logger;
         Initialize();
