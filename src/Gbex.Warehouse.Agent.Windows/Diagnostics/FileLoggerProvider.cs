@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using Microsoft.Extensions.Logging;
 
 namespace Gbex.Warehouse.Agent.Windows.Diagnostics;
@@ -25,7 +26,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
     }
 
     public ILogger CreateLogger(string categoryName) =>
-        _loggers.GetOrAdd(categoryName, name => new FileLogger(name, CurrentFilePath, _writeLock));
+        _loggers.GetOrAdd(categoryName, name => new FileLogger(name, () => CurrentFilePath, _writeLock));
 
     private string CurrentFilePath => Path.Combine(_directory, $"agent-{DateTime.Now:yyyy-MM-dd}.log");
 
