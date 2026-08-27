@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  PILOT_VERSION: "1.6.0"
+  PILOT_VERSION: "1.7.0"
 
 jobs:
   build-test-publish:

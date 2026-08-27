@@ -2,6 +2,7 @@ using System.Text.Json;
 using Gbex.Warehouse.Agent.Core.Abstractions;
 using Gbex.Warehouse.Agent.Core.Barcode;
 using Gbex.Warehouse.Agent.Core.Correlation;
+using Gbex.Warehouse.Agent.Core.EasyCube;
 using Gbex.Warehouse.Agent.Core.Idempotency;
 using Gbex.Warehouse.Agent.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -209,14 +210,14 @@ public sealed class WarehouseWorkflowEngine
         string? imageHandle = null;
         if (!string.IsNullOrEmpty(measurement.ImageBase64))
         {
-            try
+            var bytes = EasyCubeImageDecoder.TryDecode(measurement.ImageBase64);
+            if (bytes is not null)
             {
-                var bytes = Convert.FromBase64String(measurement.ImageBase64);
                 imageHandle = await _imageStore.SaveTemporaryAsync(bytes, "image/jpeg", ct);
             }
-            catch (FormatException)
+            else
             {
-                _logger.LogWarning("EasyCube returned a malformed image payload for package {PackageNumber} — continuing without evidence image", measurement.PackageNumber);
+                _logger.LogWarning("EasyCube returned an undecodable image payload for package {PackageNumber} — continuing without evidence image", measurement.PackageNumber);
             }
         }
 
@@ -361,7 +362,13 @@ public sealed class WarehouseWorkflowEngine
                 return null;
             }
 
-            var bytes = Convert.FromBase64String(outcome.Measurement.ImageBase64);
+            var bytes = EasyCubeImageDecoder.TryDecode(outcome.Measurement.ImageBase64);
+            if (bytes is null)
+            {
+                _logger.LogWarning("EasyCube's /alibi response for package {PackageNumber} carried an undecodable image payload", packageNumber);
+                return null;
+            }
+
             return await _imageStore.SaveTemporaryAsync(bytes, "image/jpeg", ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
