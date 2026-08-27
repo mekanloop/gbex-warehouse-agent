@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Gbex.Warehouse.Agent.Infrastructure.EasyCube;
@@ -47,7 +48,15 @@ public sealed class EasyCubeMeasurementResponse
     [JsonPropertyName("DimWeightUnit")] public string? DimWeightUnit { get; set; }
     [JsonPropertyName("DimWeightFactor")] public double DimWeightFactor { get; set; }
     [JsonPropertyName("DimWeightFactorUnit")] public string? DimWeightFactorUnit { get; set; }
-    [JsonPropertyName("DimWeightFactorType")] public int DimWeightFactorType { get; set; }
+    // FLAGGED FINDING (confirmed on real hardware, 2026-08-27): the
+    // manufacturer's own example shows this as an int (0), but a real
+    // device returned a STRING ("DOM") here — System.Text.Json throws on a
+    // type mismatch, which (same failure mode as the PackageLength
+    // spelling above) turns the ENTIRE response into an undeserializable
+    // MalformedResponse, discarding a good evidence photo along with it.
+    // Never consumed elsewhere in this codebase, so JsonElement (accepts
+    // any valid JSON token without throwing) is a safe, minimal fix.
+    [JsonPropertyName("DimWeightFactorType")] public JsonElement DimWeightFactorType { get; set; }
     /// <summary>The device's own barcode field. In the manufacturer's own example this was populated with a stray unit string ("cm"), suggesting the field is not reliably populated on every configuration/mode — treated only as a soft cross-check against the operator's scan, never as the primary correlation key (PackageNumber is).</summary>
     [JsonPropertyName("Barcode")] public string? Barcode { get; set; }
     [JsonPropertyName("TareEnabled")] public bool TareEnabled { get; set; }

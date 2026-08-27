@@ -137,6 +137,26 @@ public class EasyCubeClientMappingTests
         Assert.Equal(17.2m, ok.Measurement!.LengthCm);
     }
 
+    /// <summary>
+    /// A real EasyCube unit (2026-08-27) returned "DOM" (a string) for
+    /// DimWeightFactorType where the manufacturer's own example shows an
+    /// int (0). Before this fix, the resulting JsonException made the
+    /// WHOLE response fail to deserialize — silently discarding the
+    /// evidence photo carried in the same response, with no indication the
+    /// image itself was ever fine.
+    /// </summary>
+    [Fact]
+    public async Task CaptureMeasurementAsync_tolerates_a_string_DimWeightFactorType()
+    {
+        var body = RealCapMeasureExample.Replace("\"DimWeightFactorType\": 0,", "\"DimWeightFactorType\": \"DOM\",");
+        var client = BuildClient(HttpStatusCode.OK, body);
+
+        var result = await client.CaptureMeasurementAsync(CancellationToken.None);
+
+        var ok = Assert.IsType<MeasurementOutcome>(result);
+        Assert.Equal("aGVsbG8=", ok.Measurement!.ImageBase64);
+    }
+
     [Fact]
     public async Task An_unrecognized_weight_unit_is_rejected_rather_than_silently_misinterpreted()
     {
