@@ -188,14 +188,14 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
         // IS the capture time; the device's own value is only logged (as a
         // diagnostic breadcrumb for spotting a frozen/misconfigured clock),
         // never used for correlation/staleness.
-        var receivedAt = DateTimeOffset.UtcNow;
-        LogDeviceClockDriftIfSuspicious(record.TimestampRaw, receivedAt);
+        var capturedAt = DateTimeOffset.UtcNow;
+        LogDeviceClockDriftIfSuspicious(record.TimestampRaw, capturedAt);
 
         var measurement = new CapturedMeasurement
         {
             DeviceId = record.DeviceSerial,
             PackageNumber = record.PackageNumber,
-            Timestamp = receivedAt,
+            Timestamp = capturedAt,
             WeightKg = weightOk.Value,
             LengthCm = lengthOk.Value,
             WidthCm = widthOk.Value,
