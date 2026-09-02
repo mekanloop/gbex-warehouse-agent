@@ -27,6 +27,20 @@ public partial class MainWindow : Window
         ScanTextBox.Focus();
     }
 
+    private void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        var version = _viewModel.PendingUpdate?.Version ?? "";
+        var confirm = MessageBox.Show(
+            this,
+            $"Ajan v{version} sürümüne güncellenecek ve uygulama kapanacak. Devam edilsin mi?",
+            "Güncelle",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        _viewModel.InstallUpdateNow();
+    }
+
     private void StationSettings_Click(object sender, RoutedEventArgs e)
     {
         var window = _createStationSettingsWindow();

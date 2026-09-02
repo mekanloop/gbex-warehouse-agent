@@ -10,6 +10,7 @@ using Gbex.Warehouse.Agent.Infrastructure.Configuration;
 using Gbex.Warehouse.Agent.Infrastructure.Diagnostics;
 using Gbex.Warehouse.Agent.Infrastructure.Gbex;
 using Gbex.Warehouse.Agent.Infrastructure.Heartbeat;
+using Gbex.Warehouse.Agent.Infrastructure.Update;
 
 namespace Gbex.Warehouse.Agent.Windows.ViewModels;
 
@@ -28,6 +29,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IEasyCubeClient _easyCubeClient;
     private readonly IEasyCubeConnection _easyCubeConnection;
     private readonly ISecretStore _secretStore;
+    private readonly AgentUpdateService _updateService;
     private readonly AgentSettings _settings;
     private readonly ScanDebouncer _debouncer;
     private readonly Dispatcher _dispatcher;
@@ -112,8 +114,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public StationOrderDto? CurrentOrder
     {
         get => _currentOrder;
-        private set { _currentOrder = value; Raise(); }
+        private set { _currentOrder = value; Raise(); Raise(nameof(FulfillmentModeText)); }
     }
+
+    /// <summary>
+    /// Operator-facing fulfillment badge, derived ONLY from
+    /// Order.fulfillmentMode/requiresManualCarrierLabel — never from the
+    /// GBEX/GBX barcode prefix (a readability hint only, not reliable for
+    /// branching). Carries no customer PII, carrier identity, or pricing —
+    /// StationOrderDto never contains any of that in the first place. A
+    /// manual order pending a carrier label is still fully measurable; this
+    /// text is informational only and never blocks the measurement flow.
+    /// </summary>
+    public string? FulfillmentModeText => CurrentOrder switch
+    {
+        null => null,
+        { FulfillmentMode: "manual_carrier", RequiresManualCarrierLabel: true } => "MANUEL — kargo etiketi henüz eşleştirilmedi",
+        { FulfillmentMode: "manual_carrier" } => "MANUEL — kargo etiketi eşleştirildi",
+        { FulfillmentMode: "live_carrier" } => "API / Karrio",
+        _ => null,
+    };
 
     private string? _lastMeasurementSummary;
     public string? LastMeasurementSummary
@@ -129,6 +149,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         private set { _offlineQueueCount = value; Raise(); }
     }
 
+    private PendingAgentUpdate? _pendingUpdate;
+    /// <summary>Non-null once a newer version has been downloaded AND verified against its manifest sha256 — never set from an unverified download.</summary>
+    public PendingAgentUpdate? PendingUpdate
+    {
+        get => _pendingUpdate;
+        private set { _pendingUpdate = value; Raise(); Raise(nameof(HasPendingUpdate)); Raise(nameof(UpdateBannerText)); Raise(nameof(UpdateIsMandatory)); }
+    }
+
+    public bool HasPendingUpdate => PendingUpdate is not null;
+    public bool UpdateIsMandatory => PendingUpdate?.Mandatory ?? false;
+
+    public string? UpdateBannerText => PendingUpdate switch
+    {
+        null => null,
+        { Mandatory: true } u => $"ZORUNLU GÜNCELLEME HAZIR — v{u.Version}. Lütfen en kısa sürede uygulayın.",
+        { } u => $"Güncelleme hazır — v{u.Version}. Bir sonraki yeniden başlatmada otomatik kurulacak.",
+    };
+
     public MainViewModel(
         WarehouseWorkflowEngine engine,
         HeartbeatService heartbeat,
@@ -138,6 +176,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ISecretStore secretStore,
         AgentSettings settings,
         IClock clock,
+        AgentUpdateService updateService,
         string agentVersion)
     {
         _engine = engine;
@@ -146,6 +185,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _easyCubeClient = easyCubeClient;
         _easyCubeConnection = easyCubeConnection;
         _secretStore = secretStore;
+        _updateService = updateService;
         _settings = settings;
         _debouncer = new ScanDebouncer(clock);
         AgentVersion = agentVersion;
@@ -155,6 +195,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _heartbeat.StateChanged += OnHeartbeatStateChanged;
         _easyCubeConnection.StateChanged += OnEasyCubeConnectionStateChanged;
         _easyCubeConnection.MeasurementReceived += OnDeviceMeasurementReceivedAsync;
+        _updateService.UpdateReady += OnUpdateReady;
+        // Covers the (unlikely, given the service's own startup delay) race
+        // where a check already completed before this view model finished
+        // constructing and subscribing.
+        if (_updateService.PendingUpdate is { } alreadyPending) OnUpdateReady(alreadyPending);
 
         _queueCountTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _queueCountTimer.Tick += async (_, _) => await RefreshQueueCountAsync();
@@ -181,6 +226,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnEasyCubeConnectionStateChanged(EasyCubeConnectionState _) =>
         _dispatcher.Invoke(() => Raise(nameof(EasyCubeStatusText)));
+
+    private void OnUpdateReady(PendingAgentUpdate update) =>
+        _dispatcher.Invoke(() => PendingUpdate = update);
+
+    /// <summary>
+    /// Called from the "Şimdi Güncelle" button. Deliberately does nothing
+    /// but request a normal app shutdown — the ONE place that actually
+    /// launches the verified installer is App.xaml.cs's OnExit, so a
+    /// button-triggered install and an ordinary window close both apply an
+    /// already-staged update the exact same way, with no separate code path
+    /// that could double-launch it or skip verification.
+    /// </summary>
+    public void InstallUpdateNow() => System.Windows.Application.Current?.Shutdown();
 
     private async Task RefreshQueueCountAsync()
     {
@@ -323,5 +381,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _heartbeat.StateChanged -= OnHeartbeatStateChanged;
         _easyCubeConnection.StateChanged -= OnEasyCubeConnectionStateChanged;
         _easyCubeConnection.MeasurementReceived -= OnDeviceMeasurementReceivedAsync;
+        _updateService.UpdateReady -= OnUpdateReady;
     }
 }

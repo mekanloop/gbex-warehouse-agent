@@ -11,6 +11,9 @@ public class BarcodeNormalizerTests
     [InlineData("  GBEX2508230001  ", "GBEX2508230001")]
     [InlineData("gbex2508230001", "GBEX2508230001")]
     [InlineData("GBEX2508230001\r\n", "GBEX2508230001")]
+    [InlineData("GBX2508230001", "GBX2508230001")]
+    [InlineData("gbx2508230001", "GBX2508230001")]
+    [InlineData("  GBX2508230001  ", "GBX2508230001")]
     public void Normalize_accepts_and_uppercases_valid_barcodes(string input, string expected)
     {
         var result = BarcodeNormalizer.Normalize(input);
@@ -37,6 +40,8 @@ public class BarcodeNormalizerTests
     [InlineData("NOTGBEX1234567890")]
     [InlineData("GBEX123")]
     [InlineData("GBEX25082300012")]
+    [InlineData("GBX123")]
+    [InlineData("GBX25082300012")]
     [InlineData("<script>alert(1)</script>")]
     public void Normalize_rejects_wrong_format(string input)
     {

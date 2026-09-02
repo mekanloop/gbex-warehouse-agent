@@ -11,6 +11,7 @@ using Gbex.Warehouse.Agent.Infrastructure.Evidence;
 using Gbex.Warehouse.Agent.Infrastructure.Gbex;
 using Gbex.Warehouse.Agent.Infrastructure.Heartbeat;
 using Gbex.Warehouse.Agent.Infrastructure.Outbox;
+using Gbex.Warehouse.Agent.Infrastructure.Update;
 using Gbex.Warehouse.Agent.Windows.Printing;
 using Gbex.Warehouse.Agent.Windows.Secrets;
 using Gbex.Warehouse.Agent.Windows.ViewModels;
@@ -121,6 +122,14 @@ public partial class App : Application
         builder.Services.AddHostedService(sp => sp.GetRequiredService<HeartbeatService>());
         builder.Services.AddHostedService<OutboxProcessor>();
 
+        builder.Services.AddSingleton(sp => new AgentUpdateService(
+            sp.GetRequiredService<IGbexApiClient>(),
+            sp.GetRequiredService<ISecretStore>(),
+            AgentVersion,
+            appDataDir,
+            sp.GetRequiredService<ILogger<AgentUpdateService>>()));
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<AgentUpdateService>());
+
         builder.Services.AddSingleton<MainViewModel>(sp => new MainViewModel(
             sp.GetRequiredService<WarehouseWorkflowEngine>(),
             sp.GetRequiredService<HeartbeatService>(),
@@ -130,6 +139,7 @@ public partial class App : Application
             sp.GetRequiredService<ISecretStore>(),
             sp.GetRequiredService<AgentSettings>(),
             sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<AgentUpdateService>(),
             AgentVersion));
         builder.Services.AddTransient<StationSettingsWindow>();
         builder.Services.AddSingleton<MainWindow>(sp => new MainWindow(
@@ -159,8 +169,40 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // The ONLY place a downloaded update installer is ever launched —
+        // on every normal app exit (whether the operator just closed the
+        // window, or clicked "Şimdi Güncelle" which calls Shutdown()),
+        // never forced mid-workflow. A verified installer left on disk from
+        // a run where this failed is simply retried on the next exit, since
+        // AgentUpdateService.PendingUpdate keeps pointing at the same file.
+        ApplyPendingUpdateIfAny();
+
         _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         _host?.Dispose();
         base.OnExit(e);
+    }
+
+    private void ApplyPendingUpdateIfAny()
+    {
+        var updateService = _host?.Services.GetService<AgentUpdateService>();
+        var pending = updateService?.PendingUpdate;
+        if (pending is null) return;
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = pending.InstallerPath,
+                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            // Never let a failed install launch block the app from closing
+            // normally — the verified file stays on disk and is retried on
+            // the next exit (or re-downloaded if it has gone missing).
+            _host?.Services.GetService<ILogger<App>>()?.LogWarning(ex, "Failed to launch staged update installer {Version}", pending.Version);
+        }
     }
 }

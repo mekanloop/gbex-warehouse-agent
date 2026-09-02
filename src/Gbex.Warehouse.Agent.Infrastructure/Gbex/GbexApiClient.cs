@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gbex.Warehouse.Agent.Core.Abstractions;
 using Gbex.Warehouse.Agent.Core.Models;
+using Gbex.Warehouse.Agent.Core.Update;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -18,6 +19,8 @@ namespace Gbex.Warehouse.Agent.Infrastructure.Gbex;
 ///   POST /api/warehouse/orders/lookup      { barcode }
 ///   POST /api/warehouse/measurements       raw hardware facts + Idempotency-Key
 ///   POST /api/warehouse/measurements/{id}/evidence   multipart "photo" + Idempotency-Key
+///   GET  /api/warehouse/agent-version                self-update manifest check
+///   GET  /api/warehouse/agent-version/download        installer bytes (verify sha256 before running)
 ///
 /// Deserializes ONLY the minimal station-safe DTO — never a raw JSON blob
 /// that could carry an unexpected field through untouched. Never logs the
@@ -98,6 +101,9 @@ public sealed class GbexApiClient : IGbexApiClient
                 DeclaredLength = body.Order.DeclaredLength,
                 DeclaredWidth = body.Order.DeclaredWidth,
                 DeclaredHeight = body.Order.DeclaredHeight,
+                FulfillmentMode = body.Order.FulfillmentMode,
+                RequiresManualCarrierLabel = body.Order.RequiresManualCarrierLabel,
+                ManualFulfillmentStatus = body.Order.ManualFulfillmentStatus,
             };
             return OrderLookupOutcome.Ok(dto);
         });
@@ -159,6 +165,94 @@ public sealed class GbexApiClient : IGbexApiClient
                 ? new GbexApiResult.TransientFailure("Malformed evidence upload response")
                 : EvidenceUploadOutcome.Ok(body.PhotoUrl);
         });
+    }
+
+    public async Task<GbexApiResult> CheckForUpdateAsync(CancellationToken ct)
+    {
+        var secret = await _secretStore.TryGetStationSecretAsync(ct);
+        if (secret is null) return new GbexApiResult.Unauthorized();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/warehouse/agent-version");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+
+        return await SendAsync(request, ct, async response =>
+        {
+            var body = await ReadJsonAsync<AgentVersionResponse>(response, ct);
+            if (body is null) return new GbexApiResult.TransientFailure("Malformed agent-version response");
+
+            if (!body.Available || body.LatestVersion is null || body.InstallerUrl is null || body.Sha256 is null)
+            {
+                return AgentUpdateCheckOutcome.NoneAvailable();
+            }
+
+            return AgentUpdateCheckOutcome.Available(new AgentUpdateManifest
+            {
+                LatestVersion = body.LatestVersion,
+                InstallerUrl = body.InstallerUrl,
+                Sha256 = body.Sha256,
+                ReleaseNotes = body.ReleaseNotes,
+                Mandatory = body.Mandatory,
+            });
+        });
+    }
+
+    /// <summary>
+    /// Not built on top of the shared SendAsync/onSuccess pipeline — that
+    /// path assumes a JSON response body, but an installer download is raw
+    /// binary streamed straight to disk. Uses
+    /// HttpCompletionOption.ResponseHeadersRead so a large file is never
+    /// buffered whole in memory before the copy even starts.
+    /// </summary>
+    public async Task<GbexApiResult> DownloadUpdateInstallerAsync(string installerUrl, string destinationPath, CancellationToken ct)
+    {
+        var secret = await _secretStore.TryGetStationSecretAsync(ct);
+        if (secret is null) return new GbexApiResult.Unauthorized();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, installerUrl);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("GBEX update download timed out");
+            return new GbexApiResult.TransientFailure("timeout");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning("GBEX update download failed: {ErrorType}", ex.GetType().Name);
+            return new GbexApiResult.TransientFailure("network");
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                return response.StatusCode switch
+                {
+                    HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new GbexApiResult.Unauthorized(),
+                    HttpStatusCode.NotFound => new GbexApiResult.NotFound("Yayınlanmış bir sürüm yok."),
+                    _ => new GbexApiResult.TransientFailure($"http_{(int)response.StatusCode}"),
+                };
+            }
+
+            try
+            {
+                await using var httpStream = await response.Content.ReadAsStreamAsync(ct);
+                await using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await httpStream.CopyToAsync(fileStream, ct);
+            }
+            catch (IOException ex)
+            {
+                _logger.LogWarning(ex, "Writing downloaded update installer failed");
+                return new GbexApiResult.TransientFailure("io");
+            }
+
+            return new GbexApiResult.Success();
+        }
     }
 
     private async Task<HttpRequestMessage?> BuildRequestAsync(HttpMethod method, string path, object payload, CancellationToken ct, string? idempotencyKey = null)
@@ -272,7 +366,11 @@ public sealed class GbexApiClient : IGbexApiClient
         decimal DeclaredDesi,
         decimal DeclaredLength,
         decimal DeclaredWidth,
-        decimal DeclaredHeight);
+        decimal DeclaredHeight,
+        string FulfillmentMode,
+        bool RequiresManualCarrierLabel,
+        string? ManualFulfillmentStatus);
     private sealed record MeasurementSubmitResponse(string MeasurementId, string Result, bool RequiresEvidence);
     private sealed record EvidenceUploadResponse(bool Ok, string? PhotoUrl);
+    private sealed record AgentVersionResponse(bool Available, string? LatestVersion, string? InstallerUrl, string? Sha256, string? ReleaseNotes, bool Mandatory);
 }

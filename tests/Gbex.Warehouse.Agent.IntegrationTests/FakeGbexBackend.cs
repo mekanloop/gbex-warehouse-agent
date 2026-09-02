@@ -26,6 +26,9 @@ public sealed class FakeGbexBackend : IAsyncDisposable
     public decimal DeclaredLength { get; set; } = 40;
     public decimal DeclaredWidth { get; set; } = 30;
     public decimal DeclaredHeight { get; set; } = 20;
+    public string FulfillmentMode { get; set; } = "live_carrier";
+    public bool RequiresManualCarrierLabel { get; set; }
+    public string? ManualFulfillmentStatus { get; set; }
 
     /// <summary>Configures whether the NEXT fresh (non-replayed) submission returns pass or mismatch.</summary>
     public string NextResult { get; set; } = "mismatch";
@@ -74,6 +77,9 @@ public sealed class FakeGbexBackend : IAsyncDisposable
                     declaredLength = DeclaredLength,
                     declaredWidth = DeclaredWidth,
                     declaredHeight = DeclaredHeight,
+                    fulfillmentMode = FulfillmentMode,
+                    requiresManualCarrierLabel = RequiresManualCarrierLabel,
+                    manualFulfillmentStatus = ManualFulfillmentStatus,
                 },
             });
         });
@@ -136,9 +142,38 @@ public sealed class FakeGbexBackend : IAsyncDisposable
             return Results.Json(responseBody, statusCode: 200);
         });
 
+        _app.MapGet("/api/warehouse/agent-version", (HttpContext ctx) =>
+        {
+            if (!TryAuthenticate(ctx, out var unauthorized)) return unauthorized;
+            if (AgentReleaseVersion is null) return Results.Ok(new { available = false });
+            return Results.Ok(new
+            {
+                available = true,
+                latestVersion = AgentReleaseVersion,
+                installerUrl = "/api/warehouse/agent-version/download",
+                sha256 = AgentReleaseSha256,
+                releaseNotes = AgentReleaseNotes,
+                mandatory = AgentReleaseMandatory,
+            });
+        });
+
+        _app.MapGet("/api/warehouse/agent-version/download", (HttpContext ctx) =>
+        {
+            if (!TryAuthenticate(ctx, out var unauthorized)) return unauthorized;
+            if (AgentReleaseBytes is null) return Results.Json(new { message = "no release" }, statusCode: 404);
+            return Results.Bytes(AgentReleaseBytes, "application/vnd.microsoft.portable-executable");
+        });
+
         await _app.StartAsync();
         BaseUrl = _app.Urls.First();
     }
+
+    /// <summary>Null = "no release published" (available:false), matching the real backend's healthy-empty-state response.</summary>
+    public string? AgentReleaseVersion { get; set; }
+    public string? AgentReleaseSha256 { get; set; }
+    public string? AgentReleaseNotes { get; set; }
+    public bool AgentReleaseMandatory { get; set; }
+    public byte[]? AgentReleaseBytes { get; set; }
 
     private bool TryAuthenticate(HttpContext ctx, out IResult unauthorizedResult)
     {

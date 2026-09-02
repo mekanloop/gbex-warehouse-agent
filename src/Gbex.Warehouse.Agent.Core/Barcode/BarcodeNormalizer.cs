@@ -12,16 +12,21 @@ public abstract record BarcodeNormalizationResult
 
 /// <summary>
 /// Normalizes raw USB HID keyboard-wedge scanner input. The permanent GBEX
-/// barcode format itself (GBEX + 10 digits, see gbex website repo's
-/// lib/barcode.ts) is never altered here — only whitespace/control
-/// characters around a scan are trimmed, and obviously-wrong input
+/// barcode format itself — GBEX+10 digits (manual fulfillment, and every
+/// historical order from before the split existed, including old
+/// live-Karrio ones) OR GBX+10 digits (new live/API-Karrio orders) — is
+/// never altered here, only whitespace/control characters around a scan are
+/// trimmed. See gbex website repo's lib/barcode.ts isValidGbexBarcode: the
+/// prefix is a human-readability hint only, never something code branches
+/// on — Order.fulfillmentMode (surfaced via StationOrderDto) is the sole
+/// source of truth for manual-vs-API workflow logic. Obviously-wrong input
 /// (empty, absurdly long, wrong shape) is rejected before it ever reaches
 /// the network.
 /// </summary>
 public static class BarcodeNormalizer
 {
     private const int MaxReasonableLength = 64;
-    private static readonly Regex GbexBarcodePattern = new(@"^GBEX\d{10}$", RegexOptions.Compiled);
+    private static readonly Regex GbexBarcodePattern = new(@"^(GBEX|GBX)\d{10}$", RegexOptions.Compiled);
 
     public static BarcodeNormalizationResult Normalize(string? rawInput)
     {

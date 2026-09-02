@@ -155,6 +155,11 @@ public partial class StationSettingsWindow : Window
         var result = await EasyCubeTcpProbe.TestAsync(host, port, TimeSpan.FromSeconds(5), CancellationToken.None);
         EasyCubeTcpTestResultText.Text = result switch
         {
+            EasyCubeTcpProbeResult.Ok { ImageScalePercent: int scale } ok when scale < EasyCubeTcpProbe.LowImageScaleThreshold =>
+                $"✓ Bağlantı başarılı — cihaz: {ok.DeviceModel}\n" +
+                $"⚠ Görüntü ölçeği %{scale} — DÜŞÜK. Kanıt fotoğrafları bulanık görünecektir. " +
+                "Cihazın kendi Web arayüzünden (TCPS ayarı, \"Image Scale\"/\"IS\") %100'e yükseltin — bu Ajan'ın kontrol edebileceği bir ayar değildir.",
+            EasyCubeTcpProbeResult.Ok { ImageScalePercent: int scale } ok => $"✓ Bağlantı başarılı — cihaz: {ok.DeviceModel} (görüntü ölçeği: %{scale})",
             EasyCubeTcpProbeResult.Ok ok => $"✓ Bağlantı başarılı — cihaz: {ok.DeviceModel}",
             EasyCubeTcpProbeResult.Unreachable => "✗ Cihaza ulaşılamadı. IP adresini, portu ve ağ/switch bağlantısını kontrol edin.",
             EasyCubeTcpProbeResult.Timeout => "✗ Cihaz yanıt vermedi (zaman aşımı).",

@@ -1,4 +1,5 @@
 using Gbex.Warehouse.Agent.Core.Models;
+using Gbex.Warehouse.Agent.Core.Update;
 
 namespace Gbex.Warehouse.Agent.Core.Abstractions;
 
@@ -39,6 +40,14 @@ public sealed record EvidenceUploadOutcome : GbexApiResult
     public string? PhotoUrl { get; init; }
 }
 
+/// <summary>Manifest is null when the backend has no release published yet — a normal, healthy state, never an error.</summary>
+public sealed record AgentUpdateCheckOutcome : GbexApiResult
+{
+    public static AgentUpdateCheckOutcome Available(AgentUpdateManifest manifest) => new() { Manifest = manifest };
+    public static AgentUpdateCheckOutcome NoneAvailable() => new() { Manifest = null };
+    public AgentUpdateManifest? Manifest { get; init; }
+}
+
 /// <summary>
 /// Typed client for GBEX's machine-authenticated warehouse routes. Exact
 /// contracts from app/api/warehouse/* in the gbex website repo — see
@@ -56,4 +65,17 @@ public interface IGbexApiClient
 
     /// <summary>imageBytes for a MISMATCH measurement only — the backend rejects evidence for a pass result.</summary>
     Task<GbexApiResult> UploadEvidenceAsync(string measurementId, byte[] imageBytes, string mimeType, string idempotencyKey, CancellationToken ct);
+
+    /// <summary>GET /api/warehouse/agent-version — returns AgentUpdateCheckOutcome.NoneAvailable() when the backend has nothing published, never an error for that case.</summary>
+    Task<GbexApiResult> CheckForUpdateAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Streams the installer straight to `destinationPath` (never buffered
+    /// fully in memory — a self-contained WPF publish can be well over
+    /// 100MB) and returns GbexApiResult.Success() once the write completes.
+    /// Callers MUST still verify the file's SHA-256 against the manifest
+    /// before ever executing it — this method proves only that the bytes
+    /// were written, not that they are trustworthy.
+    /// </summary>
+    Task<GbexApiResult> DownloadUpdateInstallerAsync(string installerUrl, string destinationPath, CancellationToken ct);
 }

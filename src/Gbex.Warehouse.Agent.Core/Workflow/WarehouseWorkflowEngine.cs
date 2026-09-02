@@ -299,24 +299,37 @@ public sealed class WarehouseWorkflowEngine
             return new MeasureOutcome.Pass(result.MeasurementId);
         }
 
-        // MISMATCH: the TCP push flow carries no image at all (the
-        // manufacturer's protocol has no image field on a measurement
-        // record — see EasyCubeProtocolZeroParser's doc). If evidence is
-        // required and we don't already have one, opportunistically fetch
-        // it now via the OPTIONAL HTTP fallback link, correlated by the
-        // same PackageNumber (/alibi/{n} — the same "re-fetch by package
-        // number" endpoint the manual fallback path already relies on).
-        // This is the one place the HTTP link is used from the PRIMARY
-        // flow, not just the keyboard-wedge fallback — it fails silently
-        // (Unavailable) if the HTTP address isn't configured or the device
-        // doesn't answer, never blocking the mismatch result itself.
+        // MISMATCH: confirmed on real hardware (2026-09-02 field diagnosis)
+        // that the TCP push's own embedded "I" frame image is a LOW-
+        // RESOLUTION PREVIEW — 128x72px, ~16KB — not the device's actual
+        // capture. The same device's HTTP /alibi/{packageNumber} endpoint
+        // returns the true ~1280x720px, ~1MB capture for the identical
+        // package. Previously this only called the HTTP fallback when the
+        // TCP push carried NO image at all (imageHandle is null) — which
+        // never happens in practice, since the device always pushes SOME
+        // image, just the low-res one. That made every mismatch evidence
+        // photo silently use the blurry preview instead of the real photo.
+        //
+        // Now: whenever evidence is required and a PackageNumber is known,
+        // ALWAYS attempt the HTTP fetch and, if it succeeds, REPLACE
+        // whatever TCP-push image we already have with the full-resolution
+        // one (deleting the discarded low-res temp file). If the HTTP
+        // fallback is unavailable (not configured, unreachable, or the
+        // device doesn't answer), the low-res TCP image — if any — is kept
+        // rather than losing evidence entirely; this still fails silently
+        // (Unavailable), never blocking the mismatch result itself.
         _logger.LogInformation(
             "Mismatch evidence check for measurement {MeasurementId}: RequiresEvidence={RequiresEvidence}, hadImageFromDevicePush={HadDirectImage}, packageNumber='{PackageNumber}'",
             result.MeasurementId, result.RequiresEvidence, imageHandle is not null, submission.PackageNumber);
 
-        if (result.RequiresEvidence && imageHandle is null && !string.IsNullOrWhiteSpace(submission.PackageNumber))
+        if (result.RequiresEvidence && !string.IsNullOrWhiteSpace(submission.PackageNumber))
         {
-            imageHandle = await TryFetchEvidenceImageAsync(submission.PackageNumber, ct);
+            var highResHandle = await TryFetchEvidenceImageAsync(submission.PackageNumber, ct);
+            if (highResHandle is not null)
+            {
+                if (imageHandle is not null) await _imageStore.DeleteAsync(imageHandle, ct);
+                imageHandle = highResHandle;
+            }
         }
 
         // Upload evidence once, confirm, then delete. If the upload itself

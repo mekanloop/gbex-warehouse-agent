@@ -49,6 +49,8 @@ public class WarehouseWorkflowEngineTests
         DeclaredLength = 40,
         DeclaredWidth = 30,
         DeclaredHeight = 20,
+        FulfillmentMode = "live_carrier",
+        RequiresManualCarrierLabel = false,
     };
 
     private static CapturedMeasurement Measurement(string? imageBase64 = null) => new()
@@ -360,6 +362,55 @@ public class WarehouseWorkflowEngineTests
         var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
         Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
         fx.EasyCubeClient.Verify(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_mismatch_replaces_a_low_res_tcp_push_image_with_the_full_resolution_http_fetch()
+    {
+        // Regression test for a confirmed real-hardware bug (2026-09-02):
+        // the TCP push's own embedded "I" frame image is a low-resolution
+        // preview (128x72px on the real device, vs ~1280x720px from the
+        // same device's HTTP /alibi endpoint for the identical package).
+        // The engine must not skip the HTTP fetch just because SOME image
+        // already came through the TCP push — it must always prefer the
+        // full-resolution HTTP one when available, and discard the low-res
+        // TCP image rather than uploading it.
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-lowres-1", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
+
+        // The TCP push itself DID carry an image (the low-res preview),
+        // saved first; the HTTP fallback's fetch saves a SECOND, separate
+        // temp file for the full-resolution replacement — SetupSequence
+        // distinguishes the two calls so the test can assert the first
+        // (low-res) one is discarded, not the second (high-res) one.
+        fx.ImageStore.SetupSequence(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("temp/tcp-lowres.jpg")
+            .ReturnsAsync("temp/http-highres.jpg");
+        // The HTTP fallback, keyed by the same PackageNumber, supplies the
+        // real full-resolution capture.
+        fx.EasyCubeClient.Setup(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
+        fx.ImageStore.Setup(s => s.ReadAsync("temp/http-highres.jpg", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FakeJpegBytes);
+        fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m-lowres-1", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EvidenceUploadOutcome.Ok("https://example/photo.jpg"));
+
+        var engine = fx.BuildEngine();
+        // The device-push measurement HAS an image (unlike the "no image"
+        // test above) — this is the realistic real-hardware case.
+        var measurement = Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes)) with { DeviceReportedBarcode = "GBEX2508230001" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
+        // The HTTP fallback must always be attempted, even though the TCP
+        // push already provided an image — this is the actual fix.
+        fx.EasyCubeClient.Verify(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()), Times.Once);
+        // The low-res TCP image must be discarded, not uploaded.
+        fx.ImageStore.Verify(s => s.DeleteAsync("temp/tcp-lowres.jpg", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
