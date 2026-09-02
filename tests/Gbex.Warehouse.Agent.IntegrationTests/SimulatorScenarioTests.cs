@@ -78,8 +78,21 @@ public class SimulatorScenarioTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Stale_measurement_is_captured_but_rejected_by_correlation_validation()
+    public async Task Stale_measurement_from_the_device_is_NOT_rejected_because_cap_measure_trusts_receipt_time_not_the_device_clock()
     {
+        // Confirmed on real hardware (2026-09-02): the device's own echoed
+        // TimeStamp field can be FROZEN — not merely stale — which used to
+        // make every mismatch permanently rejected as StaleMeasurement no
+        // matter how generous the tolerance. /cap_measure triggers a
+        // synchronous fresh capture, so CaptureMeasurementAsync now stamps
+        // the returned CapturedMeasurement with the Agent's own receipt
+        // time (see EasyCubeClient's isFreshCapture) instead of trusting
+        // the device's clock — a device that echoes an old/frozen
+        // timestamp on this specific endpoint must no longer cause a
+        // rejection. (MeasurementCorrelationValidatorTests still directly
+        // covers the validator actually rejecting a genuinely stale
+        // CapturedMeasurement — this test only confirms EasyCubeClient no
+        // longer feeds it one from a fresh /cap_measure call.)
         await Configure(SimulatorScenario.StaleMeasurement);
         var result = await _client.CaptureMeasurementAsync(CancellationToken.None);
         var ok = Assert.IsType<MeasurementOutcome>(result);
@@ -87,7 +100,7 @@ public class SimulatorScenarioTests : IAsyncLifetime
         var validator = new MeasurementCorrelationValidator(new SystemClock(), TimeSpan.FromSeconds(30));
         var correlation = validator.Validate("GBEX2508230001", ok.Measurement!);
 
-        Assert.IsType<CorrelationResult.StaleMeasurement>(correlation);
+        Assert.IsType<CorrelationResult.Valid>(correlation);
     }
 
     [Fact]
