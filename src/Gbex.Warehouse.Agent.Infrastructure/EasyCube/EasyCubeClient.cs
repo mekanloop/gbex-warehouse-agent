@@ -65,19 +65,33 @@ public sealed class EasyCubeClient : IEasyCubeClient
         return await GetAsync<EasyCubeErrorLogEntry[]>("/errorlog", ct, _ => new EasyCubeResult.Success());
     }
 
+    /// <summary>/cap_measure triggers a brand-new capture synchronously — the ONLY endpoint where "now" is a more trustworthy timestamp than the device's own, confirmed unreliable, TimeStamp field (see GetMeasurementAsync's isFreshCapture parameter).</summary>
     public Task<EasyCubeResult> CaptureMeasurementAsync(CancellationToken ct) =>
-        GetMeasurementAsync("/cap_measure", ct);
+        GetMeasurementAsync("/cap_measure", ct, isFreshCapture: true);
 
     public Task<EasyCubeResult> GetLastMeasurementAsync(CancellationToken ct) =>
-        GetMeasurementAsync("/last_measure", ct);
+        GetMeasurementAsync("/last_measure", ct, isFreshCapture: false);
 
     public Task<EasyCubeResult> GetLastCapturedMeasurementAsync(CancellationToken ct) =>
-        GetMeasurementAsync("/last_cap_measure", ct);
+        GetMeasurementAsync("/last_cap_measure", ct, isFreshCapture: false);
 
     public Task<EasyCubeResult> GetByPackageNumberAsync(string packageNumber, CancellationToken ct) =>
-        GetMeasurementAsync($"/alibi/{Uri.EscapeDataString(packageNumber)}", ct);
+        GetMeasurementAsync($"/alibi/{Uri.EscapeDataString(packageNumber)}", ct, isFreshCapture: false);
 
-    private async Task<EasyCubeResult> GetMeasurementAsync(string path, CancellationToken ct)
+    /// <summary>
+    /// isFreshCapture is true ONLY for /cap_measure — confirmed on real
+    /// hardware (2026-09-02) that the device's own TimeStamp field can be
+    /// FROZEN (two measurements taken ~90 minutes apart both echoed the
+    /// exact same TimeStamp value), not merely drifting, which made
+    /// staleness rejection fail permanently once enough real time had
+    /// passed regardless of how generous the tolerance was set. For a
+    /// synchronous fresh trigger, the Agent's own receipt time IS the
+    /// capture time (network latency is milliseconds); for the other three
+    /// endpoints (/last_measure, /last_cap_measure, /alibi/{n}), the
+    /// returned record may genuinely be historical, so substituting "now"
+    /// there would silently defeat the staleness check instead of fixing it.
+    /// </summary>
+    private async Task<EasyCubeResult> GetMeasurementAsync(string path, CancellationToken ct, bool isFreshCapture)
     {
         return await GetAsync<EasyCubeMeasurementResponse>(path, ct, body =>
         {
@@ -108,7 +122,7 @@ public sealed class EasyCubeClient : IEasyCubeClient
                 if (dimWeight is UnitParseResult.Ok dimOk) dimWeightKg = dimOk.Value;
             }
 
-            var timestamp = ParseDeviceTimestamp(body.TimeStamp);
+            var timestamp = isFreshCapture ? DateTimeOffset.UtcNow : ParseDeviceTimestamp(body.TimeStamp);
 
             var measurement = new CapturedMeasurement
             {

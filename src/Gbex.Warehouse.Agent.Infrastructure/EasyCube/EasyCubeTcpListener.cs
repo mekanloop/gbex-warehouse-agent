@@ -180,11 +180,22 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
             if (dimWeight is UnitParseResult.Ok dimOk) dimWeightKg = dimOk.Value;
         }
 
+        // Confirmed on real hardware (2026-09-02): the device's own "T"
+        // field can be FROZEN — two measurements taken ~90 minutes apart
+        // echoed the exact same timestamp — not merely drifting, so no
+        // amount of staleness tolerance fixes it. This push is handled the
+        // instant the frame arrives on the socket, so the Agent's own clock
+        // IS the capture time; the device's own value is only logged (as a
+        // diagnostic breadcrumb for spotting a frozen/misconfigured clock),
+        // never used for correlation/staleness.
+        var receivedAt = DateTimeOffset.UtcNow;
+        LogDeviceClockDriftIfSuspicious(record.TimestampRaw, receivedAt);
+
         var measurement = new CapturedMeasurement
         {
             DeviceId = record.DeviceSerial,
             PackageNumber = record.PackageNumber,
-            Timestamp = ParseDeviceTimestamp(record.TimestampRaw),
+            Timestamp = receivedAt,
             WeightKg = weightOk.Value,
             LengthCm = lengthOk.Value,
             WidthCm = widthOk.Value,
@@ -201,16 +212,20 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
         }
     }
 
-    /// <summary>Same local-time assumption as EasyCubeClient's HTTP path (see its class doc) — the TCP protocol's "T" field uses the identical "yyyy-MM-dd HH:mm:ss" shape with no explicit timezone.</summary>
-    private DateTimeOffset ParseDeviceTimestamp(string raw)
+    /// <summary>Best-effort diagnostic only — never throws, never affects the measurement itself. Logs when the device's self-reported clock disagrees with the Agent's own by more than a minute, so a frozen/drifting device clock shows up in support logs without depending on it for anything functional.</summary>
+    private void LogDeviceClockDriftIfSuspicious(string rawDeviceTimestamp, DateTimeOffset receivedAt)
     {
-        if (DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var parsed))
+        if (!DateTime.TryParseExact(rawDeviceTimestamp, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var parsed))
         {
-            return new DateTimeOffset(parsed.ToUniversalTime());
+            return;
         }
 
-        _logger.LogWarning("EasyCube TCP timestamp '{Raw}' did not parse — treating capture as 'now'", raw);
-        return DateTimeOffset.UtcNow;
+        var deviceTime = new DateTimeOffset(parsed.ToUniversalTime());
+        var drift = receivedAt - deviceTime;
+        if (drift.Duration() > TimeSpan.FromMinutes(1))
+        {
+            _logger.LogWarning("EasyCube device clock disagrees with Agent PC clock by {Drift} (device reported '{RawTimestamp}') — device clock may be frozen or drifting; this has no effect on measurement processing", drift, rawDeviceTimestamp);
+        }
     }
 
     private void SetState(EasyCubeConnectionState state)
