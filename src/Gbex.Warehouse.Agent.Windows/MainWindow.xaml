@@ -1,104 +1,146 @@
 <Window x:Class="Gbex.Warehouse.Agent.Windows.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="GBEX Depo Ajanı" Height="520" Width="720" WindowStartupLocation="CenterScreen">
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-    </Window.Resources>
-    <Grid Margin="16">
+        Title="GBEX Depo Ajanı" Height="600" Width="800" MinHeight="560" MinWidth="740"
+        Background="{StaticResource WindowBackgroundBrush}"
+        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
-            <TextBlock Text="GBEX Depo Ajanı" FontSize="20" FontWeight="Bold" />
-            <TextBlock Text="{Binding AgentVersion, StringFormat=' v{0}'}" FontSize="14" Foreground="Gray" VerticalAlignment="Bottom" Margin="8,0,0,0" />
-        </StackPanel>
+        <!-- ===================== Header ===================== -->
+        <Border Grid.Row="0" Background="{StaticResource NavyBrush}" Padding="24,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{StaticResource YellowBrush}" CornerRadius="8" Width="36" Height="36" Margin="0,0,12,0">
+                        <TextBlock Text="G" FontSize="18" FontWeight="Bold" Foreground="{StaticResource NavyBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="GBEX Depo Ajanı" FontSize="18" FontWeight="Bold" Foreground="White" />
+                        <TextBlock Text="Windows Warehouse Agent" FontSize="11" Foreground="#B9AEDD" />
+                    </StackPanel>
+                </StackPanel>
+                <Border Grid.Column="1" Background="#2E1A5C" CornerRadius="12" Padding="10,4" VerticalAlignment="Center">
+                    <TextBlock Foreground="{StaticResource YellowBrush}" FontSize="11" FontWeight="SemiBold">
+                        <Run Text="v" /><Run Text="{Binding AgentVersion, Mode=OneWay}" />
+                    </TextBlock>
+                </Border>
+            </Grid>
+        </Border>
 
-        <Grid Grid.Row="1" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="0,0,4,0">
-                <StackPanel>
-                    <TextBlock Text="GBEX Bağlantısı" FontWeight="Bold" />
-                    <TextBlock Text="{Binding StationStatusText}" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding LastHeartbeatAt, StringFormat='Son nabız: {0:HH:mm:ss}'}" FontSize="11" Foreground="Gray" />
-                </StackPanel>
-            </Border>
-            <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,4,0">
-                <StackPanel>
-                    <TextBlock Text="EasyCube Cihazı" FontWeight="Bold" />
-                    <TextBlock Text="{Binding EasyCubeStatusText}" TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,4,0">
-                <StackPanel>
-                    <TextBlock Text="İş Akışı Durumu" FontWeight="Bold" />
-                    <TextBlock Text="{Binding WorkflowStatusText}" FontSize="14" TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-            <Border Grid.Column="3" BorderBrush="Gray" BorderThickness="1" Padding="8" Margin="4,0,0,0">
-                <StackPanel>
-                    <TextBlock Text="Çevrimdışı Kuyruk" FontWeight="Bold" />
-                    <TextBlock Text="{Binding OfflineQueueCount}" FontSize="18" />
-                </StackPanel>
-            </Border>
-        </Grid>
+        <!-- ===================== Body ===================== -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,20,24,20">
 
-        <StackPanel Grid.Row="2" Orientation="Vertical" Margin="0,0,0,8">
-            <Border Visibility="{Binding HasPendingUpdate, Converter={StaticResource BoolToVisibilityConverter}}"
-                    BorderBrush="DarkOrange" BorderThickness="1" Padding="8" Margin="0,0,0,8">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding UpdateBannerText}" FontWeight="Bold" Foreground="DarkOrange" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    <Button Content="Şimdi Güncelle" Margin="12,0,0,0" Padding="6,2" Click="InstallUpdate_Click" />
+                <!-- Update banner — only visible while a verified update is staged. -->
+                <Border Style="{StaticResource AccentCardOuter}" Background="{StaticResource WarningBackgroundBrush}"
+                        BorderBrush="#F2C572" Margin="0,0,0,16" Padding="14,10"
+                        Visibility="{Binding HasPendingUpdate, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🔔" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock Text="{Binding UpdateBannerText}" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="480" />
+                        <Button Content="Şimdi Güncelle" Style="{StaticResource AccentButton}" Margin="16,0,0,0"
+                                VerticalAlignment="Center" Click="InstallUpdate_Click" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Status tiles -->
+                <UniformGrid Columns="4" Margin="0,0,0,16">
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,6,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="🔗" FontSize="16" Margin="0,0,6,0" />
+                                <TextBlock Text="GBEX Bağlantısı" Style="{StaticResource CardTitleText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding StationStatusText}" Style="{StaticResource CardValueText}" FontSize="14" />
+                            <TextBlock Text="{Binding LastHeartbeatAt, StringFormat='Son nabız: {0:HH:mm:ss}'}" Style="{StaticResource CaptionText}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardBorder}" Margin="6,0,6,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="📷" FontSize="16" Margin="0,0,6,0" />
+                                <TextBlock Text="EasyCube Cihazı" Style="{StaticResource CardTitleText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding EasyCubeStatusText}" Style="{StaticResource CardValueText}" FontSize="14" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardBorder}" Margin="6,0,6,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="⚙️" FontSize="16" Margin="0,0,6,0" />
+                                <TextBlock Text="İş Akışı Durumu" Style="{StaticResource CardTitleText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding WorkflowStatusText}" Style="{StaticResource CardValueText}" FontSize="14" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardBorder}" Margin="6,0,0,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="📦" FontSize="16" Margin="0,0,6,0" />
+                                <TextBlock Text="Çevrimdışı Kuyruk" Style="{StaticResource CardTitleText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding OfflineQueueCount}" Style="{StaticResource CardValueText}" FontSize="22" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <!-- Manual scan fallback -->
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="Normal kullanımda hiçbir şey yapmanız gerekmez — EasyCube'un okuttuğu barkod ve ölçüm otomatik işlenir."
+                                   Style="{StaticResource CaptionText}" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Yedek — barkodu elle gir:" VerticalAlignment="Center" Margin="0,0,10,0"
+                                       Style="{StaticResource FieldLabelText}" />
+                            <TextBox x:Name="ScanTextBox" Width="260" Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding ScanInput, UpdateSourceTrigger=PropertyChanged}"
+                                     KeyDown="ScanTextBox_KeyDown" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Declared vs. last result -->
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource CardBorder}" Margin="0,0,6,0">
+                        <StackPanel>
+                            <TextBlock Text="Beyan Edilen" Style="{StaticResource SectionHeaderText}" Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding FulfillmentModeText}" FontWeight="Bold"
+                                       Foreground="{StaticResource WarningBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding CurrentOrder.DeclaredWeight, StringFormat='Ağırlık: {0} kg'}" Style="{StaticResource CardValueText}" FontSize="13" Margin="0,0,0,2" />
+                            <TextBlock Text="{Binding CurrentOrder.DeclaredLength, StringFormat='Uzunluk: {0} cm'}" Style="{StaticResource CardValueText}" FontSize="13" Margin="0,0,0,2" />
+                            <TextBlock Text="{Binding CurrentOrder.DeclaredWidth, StringFormat='Genişlik: {0} cm'}" Style="{StaticResource CardValueText}" FontSize="13" Margin="0,0,0,2" />
+                            <TextBlock Text="{Binding CurrentOrder.DeclaredHeight, StringFormat='Yükseklik: {0} cm'}" Style="{StaticResource CardValueText}" FontSize="13" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource CardBorder}" Margin="6,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Son Ölçüm Sonucu" Style="{StaticResource SectionHeaderText}" Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding LastMeasurementSummary}" Style="{StaticResource CardValueText}" FontSize="13" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}" Margin="0,0,0,16"
+                           Text="Barkod okuyucu EasyCube cihazına takılıdır; paket EasyCube'dan geçtiğinde barkod ve ölçüm otomatik gönderilir. Fiyatlandırma, onay, cüzdan ve gönderi değişimi işlemleri web yönetim panelinde yapılır." />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Tanılama Raporunu Dışa Aktar" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" Click="ExportDiagnostics_Click" />
+                    <Button Content="İstasyon Ayarları" Style="{StaticResource PrimaryButton}" Click="StationSettings_Click" />
                 </StackPanel>
-            </Border>
-            <TextBlock Text="Normal kullanımda hiçbir şey yapmanız gerekmez — EasyCube'un okuttuğu barkod ve ölçüm otomatik işlenir." FontSize="11" Foreground="Gray" Margin="0,0,0,4" />
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Yedek — barkodu elle gir:" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11" Foreground="Gray" />
-                <TextBox x:Name="ScanTextBox" Width="260" FontSize="14" Text="{Binding ScanInput, UpdateSourceTrigger=PropertyChanged}"
-                         KeyDown="ScanTextBox_KeyDown" />
             </StackPanel>
-        </StackPanel>
-
-        <Grid Grid.Row="3" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" BorderBrush="LightGray" BorderThickness="1" Padding="8" Margin="0,0,4,0">
-                <StackPanel>
-                    <TextBlock Text="Beyan Edilen" FontWeight="Bold" />
-                    <TextBlock Text="{Binding FulfillmentModeText}" FontWeight="Bold" Foreground="DarkOrange" Margin="0,0,0,4" />
-                    <TextBlock Text="{Binding CurrentOrder.DeclaredWeight, StringFormat='Ağırlık: {0} kg'}" />
-                    <TextBlock Text="{Binding CurrentOrder.DeclaredLength, StringFormat='Uzunluk: {0} cm'}" />
-                    <TextBlock Text="{Binding CurrentOrder.DeclaredWidth, StringFormat='Genişlik: {0} cm'}" />
-                    <TextBlock Text="{Binding CurrentOrder.DeclaredHeight, StringFormat='Yükseklik: {0} cm'}" />
-                </StackPanel>
-            </Border>
-            <Border Grid.Column="1" BorderBrush="LightGray" BorderThickness="1" Padding="8" Margin="4,0,0,0">
-                <StackPanel>
-                    <TextBlock Text="Son Ölçüm Sonucu" FontWeight="Bold" />
-                    <TextBlock Text="{Binding LastMeasurementSummary}" TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-        </Grid>
-
-        <TextBlock Grid.Row="4" TextWrapping="Wrap" Foreground="Gray" VerticalAlignment="Top"
-                   Text="Barkod okuyucu EasyCube cihazına takılıdır; paket EasyCube'dan geçtiğinde barkod ve ölçüm otomatik gönderilir. Fiyatlandırma, onay, cüzdan ve gönderi değişimi işlemleri web yönetim panelinde yapılır." />
-
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Tanılama Raporunu Dışa Aktar" Padding="8,4" Margin="0,0,8,0" Click="ExportDiagnostics_Click" />
-            <Button Content="İstasyon Ayarları" Padding="8,4" Click="StationSettings_Click" />
-        </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>

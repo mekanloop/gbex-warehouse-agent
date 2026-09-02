@@ -30,7 +30,7 @@ public partial class StationSettingsWindow : Window
     /// <summary>Set true when shown automatically because the Agent has never been configured — shows a welcoming banner instead of the bare settings form.</summary>
     public bool IsFirstRun
     {
-        set => WelcomeText.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        set => WelcomeBanner.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public StationSettingsWindow(ISecretStore secretStore, AgentSettingsStore settingsStore, ILoggerFactory loggerFactory)

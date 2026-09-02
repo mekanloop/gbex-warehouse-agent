@@ -1,4 +1,180 @@
 <Application x:Class="Gbex.Warehouse.Agent.Windows.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- ===================== Brand palette ===================== -->
+            <!-- Matches the GBEX web admin panel: navy + yellow, no gradients. -->
+            <SolidColorBrush x:Key="NavyBrush" Color="#190A3C" />
+            <SolidColorBrush x:Key="NavyLightBrush" Color="#2E1A5C" />
+            <SolidColorBrush x:Key="YellowBrush" Color="#FFED00" />
+            <SolidColorBrush x:Key="YellowDarkBrush" Color="#E6D500" />
+            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F4F5F8" />
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#E3E5EC" />
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1B1B29" />
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6B7280" />
+            <SolidColorBrush x:Key="SuccessBrush" Color="#15803D" />
+            <SolidColorBrush x:Key="ErrorBrush" Color="#DC2626" />
+            <SolidColorBrush x:Key="WarningBrush" Color="#B45309" />
+            <SolidColorBrush x:Key="WarningBackgroundBrush" Color="#FFF7E6" />
+            <SolidColorBrush x:Key="InfoAccentBrush" Color="#3B82F6" />
+
+            <!-- ===================== Typography ===================== -->
+            <Style x:Key="SectionHeaderText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            </Style>
+            <Style x:Key="CardTitleText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            </Style>
+            <Style x:Key="CardValueText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="CaptionText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="FieldLabelText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                <Setter Property="Margin" Value="0,0,0,2" />
+            </Style>
+
+            <!-- ===================== Cards ===================== -->
+            <Style x:Key="CardBorder" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="14,12" />
+            </Style>
+
+            <!-- A card with a colored 4px accent bar on the left edge, built
+                 from two nested borders (outer supplies the accent color as
+                 its background, inner is the white content area) rather than
+                 a custom template — keeps this simple enough to trust
+                 without a live preview. -->
+            <Style x:Key="AccentCardOuter" TargetType="Border">
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+            </Style>
+
+            <!-- ===================== Buttons ===================== -->
+            <Style x:Key="PrimaryButton" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource NavyBrush}" />
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Padding" Value="16,8" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="6">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource NavyLightBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bg" Property="Opacity" Value="0.85" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Bg" Property="Opacity" Value="0.5" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                <Setter Property="Background" Value="{StaticResource YellowBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource NavyBrush}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="6">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource YellowDarkBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bg" Property="Opacity" Value="0.85" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SecondaryButton" TargetType="Button">
+                <Setter Property="Background" Value="White" />
+                <Setter Property="Foreground" Value="{StaticResource NavyBrush}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Padding" Value="14,7" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="6"
+                                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource WindowBackgroundBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bg" Property="Opacity" Value="0.85" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Bg" Property="Opacity" Value="0.5" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ===================== Inputs ===================== -->
+            <Style x:Key="ModernTextBox" TargetType="TextBox">
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Background" Value="White" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="ModernPasswordBox" TargetType="PasswordBox">
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Background" Value="White" />
+                <Setter Property="FontSize" Value="13" />
+            </Style>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>
