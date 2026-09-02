@@ -14,7 +14,7 @@ public abstract record BarcodeNormalizationResult
 /// Normalizes raw USB HID keyboard-wedge scanner input. The permanent GBEX
 /// barcode format itself — GBEX+10 digits (manual fulfillment, and every
 /// historical order from before the split existed, including old
-/// live-Karrio ones) OR GBX+10 digits (new live/API-Karrio orders) — is
+/// live-carrier ones) OR GBX+10 digits (new live-carrier/API orders) — is
 /// never altered here, only whitespace/control characters around a scan are
 /// trimmed. See gbex website repo's lib/barcode.ts isValidGbexBarcode: the
 /// prefix is a human-readability hint only, never something code branches

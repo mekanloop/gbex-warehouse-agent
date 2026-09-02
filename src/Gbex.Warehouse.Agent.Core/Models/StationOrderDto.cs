@@ -24,13 +24,13 @@ public sealed record StationOrderDto
     /// Order.fulfillmentMode, verbatim ("manual_carrier" or "live_carrier") —
     /// the ONLY thing the Agent should ever branch manual-vs-API workflow
     /// logic on. The GBEX/GBX barcode prefix is a human-readability hint
-    /// only (a handful of historical live-Karrio orders still carry the old
+    /// only (a handful of historical live-carrier orders still carry the old
     /// GBEX prefix) — never decide behavior from it.
     /// </summary>
     public required string FulfillmentMode { get; init; }
     /// <summary>
     /// True whenever the operator still needs to run the manual label
-    /// workflow instead of relying on an already-purchased Karrio label. A
+    /// workflow instead of relying on an already-purchased live-carrier label. A
     /// manual order can and must still be measurable before a real carrier
     /// label is matched — this flag is informational for the operator's
     /// screen, never a gate on the measurement flow itself.

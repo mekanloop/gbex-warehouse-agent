@@ -131,7 +131,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         null => null,
         { FulfillmentMode: "manual_carrier", RequiresManualCarrierLabel: true } => "MANUEL — kargo etiketi henüz eşleştirilmedi",
         { FulfillmentMode: "manual_carrier" } => "MANUEL — kargo etiketi eşleştirildi",
-        { FulfillmentMode: "live_carrier" } => "API / Karrio",
+        { FulfillmentMode: "live_carrier" } => "API",
         _ => null,
     };
 
