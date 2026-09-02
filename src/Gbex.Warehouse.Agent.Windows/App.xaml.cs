@@ -60,11 +60,15 @@ public partial class App : Application
         // Real EasyCube units in the field do not reliably keep accurate
         // time (no battery-backed RTC, no confirmed NTP sync) — a physical
         // pilot measured several minutes of drift that did not fully
-        // resolve even after the operator corrected the device clock. The
-        // class default (30s) assumes a well-synced device; 15 minutes
-        // still catches a genuinely stale/replayed "last measurement" while
-        // tolerating realistic field clock drift.
-        builder.Services.AddSingleton(sp => new MeasurementCorrelationValidator(sp.GetRequiredService<IClock>(), TimeSpan.FromMinutes(15)));
+        // resolve even after the operator corrected the device clock; a
+        // later pilot (2026-09-02) saw drift exceed the previous 15-minute
+        // tolerance (~20.5 minutes), rejecting a genuinely fresh measurement
+        // as StaleMeasurement. The class default (30s) assumes a well-synced
+        // device; 60 minutes still catches a genuinely stale/replayed "last
+        // measurement" (a device reporting an hour-old reading is a real
+        // fault, not clock drift) while tolerating realistic field drift
+        // that the device's own clock has been observed not to self-correct.
+        builder.Services.AddSingleton(sp => new MeasurementCorrelationValidator(sp.GetRequiredService<IClock>(), TimeSpan.FromMinutes(60)));
         builder.Services.AddSingleton<IEvidenceImageStore>(sp =>
             new TemporaryImageStore(Path.Combine(appDataDir, "evidence-temp"), sp.GetRequiredService<ILogger<TemporaryImageStore>>()));
         builder.Services.AddSingleton<IOutboxStore>(sp =>
