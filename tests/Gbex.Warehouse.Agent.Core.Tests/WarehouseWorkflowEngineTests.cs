@@ -365,6 +365,85 @@ public class WarehouseWorkflowEngineTests
     }
 
     [Fact]
+    public async Task HandleDeviceMeasurement_mismatch_prefers_last_cap_measure_over_alibi_when_the_package_number_matches()
+    {
+        // Regression test for a second real-hardware finding (2026-09-02):
+        // /alibi/{packageNumber} ALSO only stores a low-resolution ~128x72px
+        // thumbnail (not the real capture), despite correlating correctly by
+        // package number. /last_cap_measure returns the true full-resolution
+        // capture, so it must be tried FIRST and /alibi must never be called
+        // at all once it succeeds with a matching package number.
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-lastcap-1", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
+        // Measurement()'s default PackageNumber is "419" — last_cap_measure
+        // returns a measurement for that SAME package, so it should be trusted.
+        fx.EasyCubeClient.Setup(c => c.GetLastCapturedMeasurementAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
+        fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("temp/lastcap.jpg");
+        fx.ImageStore.Setup(s => s.ReadAsync("temp/lastcap.jpg", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FakeJpegBytes);
+        fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m-lastcap-1", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EvidenceUploadOutcome.Ok("https://example/photo.jpg"));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" }; // no TCP-push image
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
+        fx.EasyCubeClient.Verify(c => c.GetLastCapturedMeasurementAsync(It.IsAny<CancellationToken>()), Times.Once);
+        fx.EasyCubeClient.Verify(c => c.GetByPackageNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleDeviceMeasurement_mismatch_falls_back_to_alibi_when_last_cap_measure_is_for_a_different_package()
+    {
+        // Safety net: /last_cap_measure has no package filter of its own — if
+        // the device already moved on to a different package by the time
+        // this fires, the mismatched package's photo must be discarded
+        // rather than attached to the wrong order, falling back to /alibi
+        // (correctly correlated, even if lower resolution) instead.
+        var fx = new Fixture();
+        fx.GbexClient.Setup(c => c.LookupOrderAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(Order()));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-mismatch-pkg", Result = MeasurementResultKind.Mismatch, RequiresEvidence = true }));
+        // Different PackageNumber ("420") than the mismatch being processed ("419").
+        fx.EasyCubeClient.Setup(c => c.GetLastCapturedMeasurementAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementOutcome.Ok(new CapturedMeasurement
+            {
+                DeviceId = "00000000",
+                PackageNumber = "420",
+                Timestamp = DateTimeOffset.UtcNow,
+                WeightKg = 5,
+                LengthCm = 40,
+                WidthCm = 30,
+                HeightCm = 20,
+                ImageBase64 = Convert.ToBase64String(FakeJpegBytes),
+            }));
+        fx.EasyCubeClient.Setup(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementOutcome.Ok(Measurement(imageBase64: Convert.ToBase64String(FakeJpegBytes))));
+        fx.ImageStore.Setup(s => s.SaveTemporaryAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("temp/alibi-fallback.jpg");
+        fx.ImageStore.Setup(s => s.ReadAsync("temp/alibi-fallback.jpg", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FakeJpegBytes);
+        fx.GbexClient.Setup(c => c.UploadEvidenceAsync("m-mismatch-pkg", It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EvidenceUploadOutcome.Ok("https://example/photo.jpg"));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "GBEX2508230001" }; // PackageNumber "419"
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        var mismatch = Assert.IsType<MeasureOutcome.Mismatch>(result.Outcome);
+        Assert.Equal(EvidenceOutcome.Uploaded, mismatch.Evidence);
+        fx.EasyCubeClient.Verify(c => c.GetByPackageNumberAsync("419", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleDeviceMeasurement_mismatch_replaces_a_low_res_tcp_push_image_with_the_full_resolution_http_fetch()
     {
         // Regression test for a confirmed real-hardware bug (2026-09-02):

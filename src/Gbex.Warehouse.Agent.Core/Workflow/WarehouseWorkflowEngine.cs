@@ -371,49 +371,96 @@ public sealed class WarehouseWorkflowEngine
         return new MeasureOutcome.Mismatch(result.MeasurementId, evidence);
     }
 
-    /// <summary>Best-effort fetch of a mismatch's evidence image via the optional HTTP fallback client — never throws, returns null on any failure (unreachable device, HTTP not configured, malformed response, or no image on that package number).</summary>
+    /// <summary>
+    /// Best-effort fetch of a mismatch's full-resolution evidence image via
+    /// the optional HTTP fallback client — never throws, returns null on any
+    /// failure (unreachable device, HTTP not configured, malformed response,
+    /// or no image available anywhere).
+    ///
+    /// Confirmed on real hardware (2026-09-02) that /alibi/{packageNumber}'s
+    /// own archived image is a low-resolution ~128x72px thumbnail — using it
+    /// as the evidence photo reproduced the exact same blurry-photo bug this
+    /// method exists to fix, just with the correlation check technically
+    /// "succeeding". /last_cap_measure, confirmed on the same hardware,
+    /// returns the true ~1280x720px capture — so it is tried FIRST, with its
+    /// own PackageNumber checked against the one this mismatch is actually
+    /// for (it has no filter of its own, so a measurement taken after this
+    /// one but before this call would otherwise silently attach the WRONG
+    /// package's photo). /alibi/{packageNumber} is kept only as a last
+    /// resort when last-cap-measure is unavailable or belongs to a different
+    /// package — a low-resolution correctly-correlated photo still beats no
+    /// evidence at all.
+    /// </summary>
     private async Task<string?> TryFetchEvidenceImageAsync(string packageNumber, CancellationToken ct)
+    {
+        var lastCapHandle = await TryFetchFromAsync(
+            "/last_cap_measure",
+            () => _easyCubeClient.GetLastCapturedMeasurementAsync(ct),
+            expectedPackageNumber: packageNumber,
+            ct);
+        if (lastCapHandle is not null) return lastCapHandle;
+
+        return await TryFetchFromAsync(
+            $"/alibi/{packageNumber}",
+            () => _easyCubeClient.GetByPackageNumberAsync(packageNumber, ct),
+            expectedPackageNumber: null, // /alibi already filters by package number server-side
+            ct);
+    }
+
+    /// <summary>Shared decode/verify/save logic for a single HTTP evidence-image source — see TryFetchEvidenceImageAsync for why there are two sources tried in order.</summary>
+    private async Task<string?> TryFetchFromAsync(
+        string sourceLabel,
+        Func<Task<EasyCubeResult>> fetch,
+        string? expectedPackageNumber,
+        CancellationToken ct)
     {
         try
         {
-            var capture = await _easyCubeClient.GetByPackageNumberAsync(packageNumber, ct);
+            var capture = await fetch();
 
             if (capture is not MeasurementOutcome outcome)
             {
-                _logger.LogWarning("EasyCube /alibi/{PackageNumber} did not return a measurement: {ResultType}", packageNumber, capture.GetType().Name);
+                _logger.LogWarning("EasyCube {Source} did not return a measurement: {ResultType}", sourceLabel, capture.GetType().Name);
+                return null;
+            }
+
+            if (expectedPackageNumber is not null && outcome.Measurement?.PackageNumber != expectedPackageNumber)
+            {
+                _logger.LogWarning("EasyCube {Source} returned package '{Actual}', expected '{Expected}' — discarding to avoid attaching the wrong photo",
+                    sourceLabel, outcome.Measurement?.PackageNumber, expectedPackageNumber);
                 return null;
             }
 
             if (string.IsNullOrEmpty(outcome.Measurement?.ImageBase64))
             {
-                _logger.LogWarning("EasyCube /alibi/{PackageNumber} returned a measurement with no ImageBase64 field (null or empty)", packageNumber);
+                _logger.LogWarning("EasyCube {Source} returned a measurement with no ImageBase64 field (null or empty)", sourceLabel);
                 return null;
             }
 
-            _logger.LogInformation("EasyCube /alibi/{PackageNumber} returned ImageBase64 of length {Length}", packageNumber, outcome.Measurement.ImageBase64.Length);
+            _logger.LogInformation("EasyCube {Source} returned ImageBase64 of length {Length}", sourceLabel, outcome.Measurement.ImageBase64.Length);
 
             var bytes = EasyCubeImageDecoder.TryDecode(outcome.Measurement.ImageBase64);
             if (bytes is null)
             {
-                _logger.LogWarning("EasyCube's /alibi response for package {PackageNumber} carried an undecodable image payload (first 40 chars: '{Prefix}')",
-                    packageNumber, outcome.Measurement.ImageBase64[..Math.Min(40, outcome.Measurement.ImageBase64.Length)]);
+                _logger.LogWarning("EasyCube {Source} carried an undecodable image payload (first 40 chars: '{Prefix}')",
+                    sourceLabel, outcome.Measurement.ImageBase64[..Math.Min(40, outcome.Measurement.ImageBase64.Length)]);
                 return null;
             }
 
             var mimeType = ImageFormatSniffer.Sniff(bytes);
             if (mimeType is null)
             {
-                _logger.LogWarning("EasyCube /alibi/{PackageNumber} image decoded to {Bytes} bytes but the content is not a recognized image format (first bytes: {Prefix})",
-                    packageNumber, bytes.Length, Convert.ToHexString(bytes[..Math.Min(8, bytes.Length)]));
+                _logger.LogWarning("EasyCube {Source} image decoded to {Bytes} bytes but the content is not a recognized image format (first bytes: {Prefix})",
+                    sourceLabel, bytes.Length, Convert.ToHexString(bytes[..Math.Min(8, bytes.Length)]));
                 return null;
             }
 
-            _logger.LogInformation("EasyCube /alibi/{PackageNumber} image decoded successfully, {Bytes} bytes, format {MimeType}", packageNumber, bytes.Length, mimeType);
+            _logger.LogInformation("EasyCube {Source} image decoded successfully, {Bytes} bytes, format {MimeType}", sourceLabel, bytes.Length, mimeType);
             return await _imageStore.SaveTemporaryAsync(bytes, mimeType, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Could not fetch evidence image via HTTP fallback for package {PackageNumber}", packageNumber);
+            _logger.LogWarning(ex, "Could not fetch evidence image from EasyCube {Source}", sourceLabel);
             return null;
         }
     }

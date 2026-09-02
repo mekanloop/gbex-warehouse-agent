@@ -58,9 +58,33 @@ public interface IEasyCubeClient
     /// <summary>Triggers a fresh capture (/cap_measure) and returns it with its temporary image, if any.</summary>
     Task<EasyCubeResult> CaptureMeasurementAsync(CancellationToken ct);
 
-    /// <summary>Returns the last measurement without triggering a new capture (/last_measure) — used to detect a stale/already-consumed reading.</summary>
+    /// <summary>Returns the last measurement without triggering a new capture (/last_measure) — used to detect a stale/already-consumed reading. This endpoint never carries an image (see GetLastCapturedMeasurementAsync for the one that does).</summary>
     Task<EasyCubeResult> GetLastMeasurementAsync(CancellationToken ct);
 
-    /// <summary>Queries a specific historical measurement by package number (/alibi/{packageNumber}) — used to re-fetch a capture by its correlation key rather than trusting "last" after any delay.</summary>
+    /// <summary>
+    /// Returns the last measurement WITH its image (/last_cap_measure),
+    /// without triggering a new capture. Confirmed on real hardware
+    /// (2026-09-02) that this returns the device's true full-resolution
+    /// capture (~1280x720px), unlike GetByPackageNumberAsync's /alibi/{n} —
+    /// that endpoint's "archived log" storage keeps only a low-resolution
+    /// ~128x72px thumbnail per package, not the real photo, despite carrying
+    /// the correct correlation key. Since this has no package-number filter,
+    /// callers must verify the returned CapturedMeasurement.PackageNumber
+    /// matches what they expect before trusting its image for a specific
+    /// package.
+    /// </summary>
+    Task<EasyCubeResult> GetLastCapturedMeasurementAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Queries a specific historical measurement by package number
+    /// (/alibi/{packageNumber}). WARNING — confirmed on real hardware
+    /// (2026-09-02): this endpoint's own archived image is a low-resolution
+    /// ~128x72px thumbnail, NOT the device's actual capture, despite
+    /// correctly correlating by package number. Do not use this for
+    /// full-resolution evidence photos — see GetLastCapturedMeasurementAsync
+    /// instead. Kept for its correct dimensional/weight data and as a
+    /// last-resort image source when the last-cap-measure package number
+    /// doesn't match.
+    /// </summary>
     Task<EasyCubeResult> GetByPackageNumberAsync(string packageNumber, CancellationToken ct);
 }

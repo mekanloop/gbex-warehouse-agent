@@ -71,6 +71,9 @@ public sealed class EasyCubeClient : IEasyCubeClient
     public Task<EasyCubeResult> GetLastMeasurementAsync(CancellationToken ct) =>
         GetMeasurementAsync("/last_measure", ct);
 
+    public Task<EasyCubeResult> GetLastCapturedMeasurementAsync(CancellationToken ct) =>
+        GetMeasurementAsync("/last_cap_measure", ct);
+
     public Task<EasyCubeResult> GetByPackageNumberAsync(string packageNumber, CancellationToken ct) =>
         GetMeasurementAsync($"/alibi/{Uri.EscapeDataString(packageNumber)}", ct);
 
