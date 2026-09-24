@@ -332,6 +332,37 @@ public class WarehouseWorkflowEngineTests
     }
 
     [Fact]
+    public async Task HandleDeviceMeasurement_accepts_current_numeric_label_for_manual_carrier_orders()
+    {
+        var fx = new Fixture();
+        var manualOrder = Order() with
+        {
+            GbexBarcode = "GB260924000003",
+            FulfillmentMode = "manual_carrier",
+            RequiresManualCarrierLabel = true,
+            ManualFulfillmentStatus = "pending_label",
+        };
+        fx.GbexClient.Setup(c => c.LookupOrderAsync("260924000003", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(manualOrder));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-device-manual", Result = MeasurementResultKind.Pass, RequiresEvidence = false }));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "260924000003" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        Assert.NotNull(result.Order);
+        Assert.Equal("manual_carrier", result.Order!.FulfillmentMode);
+        Assert.True(result.Order.RequiresManualCarrierLabel);
+        var pass = Assert.IsType<MeasureOutcome.Pass>(result.Outcome);
+        Assert.Equal("m-device-manual", pass.MeasurementId);
+        fx.GbexClient.Verify(c => c.SubmitMeasurementAsync(
+            It.Is<MeasurementSubmission>(s => s.Barcode == "GB260924000003"),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleDeviceMeasurement_rejects_a_second_push_reusing_the_same_package_number()
     {
         var fx = new Fixture();
