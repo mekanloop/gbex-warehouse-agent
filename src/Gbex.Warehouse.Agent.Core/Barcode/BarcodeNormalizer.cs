@@ -12,21 +12,21 @@ public abstract record BarcodeNormalizationResult
 
 /// <summary>
 /// Normalizes raw USB HID keyboard-wedge scanner input. The permanent GBEX
-/// barcode format itself — GBEX+10 digits (manual fulfillment, and every
-/// historical order from before the split existed, including old
-/// live-carrier ones) OR GBX+10 digits (new live-carrier/API orders) — is
-/// never altered here, only whitespace/control characters around a scan are
-/// trimmed. See gbex website repo's lib/barcode.ts isValidGbexBarcode: the
-/// prefix is a human-readability hint only, never something code branches
-/// on — Order.fulfillmentMode (surfaced via StationOrderDto) is the sole
-/// source of truth for manual-vs-API workflow logic. Obviously-wrong input
-/// (empty, absurdly long, wrong shape) is rejected before it ever reaches
-/// the network.
+/// barcode format itself is never used to decide manual/API behavior here:
+/// Order.fulfillmentMode (surfaced via StationOrderDto) is the sole source
+/// of truth for workflow logic. The agent must accept every label format the
+/// GBEX web app can print:
+///   - GBEX+10 digits and GBX+10 digits (legacy labels)
+///   - GB+12 digits (current internal/customer-facing code)
+///   - 12 bare digits (current printed/scanner code, e.g. 260924000003)
+/// Scanner framing/separators around a scan are normalized, but obviously
+/// wrong input (empty, absurdly long, wrong shape) is rejected before it
+/// ever reaches the network.
 /// </summary>
 public static class BarcodeNormalizer
 {
     private const int MaxReasonableLength = 64;
-    private static readonly Regex GbexBarcodePattern = new(@"^(GBEX|GBX)\d{10}$", RegexOptions.Compiled);
+    private static readonly Regex GbexBarcodePattern = new(@"^((GBEX|GBX)\d{10}|GB\d{12}|\d{12}|\d{10})$", RegexOptions.Compiled);
 
     public static BarcodeNormalizationResult Normalize(string? rawInput)
     {
@@ -35,11 +35,7 @@ public static class BarcodeNormalizer
             return new BarcodeNormalizationResult.Empty();
         }
 
-        // Strip control characters (scanner terminators like CR/LF/Tab that
-        // slipped through) and surrounding whitespace, then uppercase — the
-        // format is case-insensitive at the scanner but canonical uppercase
-        // everywhere downstream, matching the backend's own normalization.
-        var cleaned = new string(rawInput.Where(c => !char.IsControl(c)).ToArray()).Trim().ToUpperInvariant();
+        var cleaned = Clean(rawInput);
 
         if (cleaned.Length == 0)
         {
@@ -57,6 +53,71 @@ public static class BarcodeNormalizer
         }
 
         return new BarcodeNormalizationResult.Valid(cleaned);
+    }
+
+    /// <summary>
+    /// Returns true when two barcode strings point at the same GBEX shipment
+    /// even if one side is the current internal form (GB+12 digits) and the
+    /// device reported the printed/scanner form (12 bare digits).
+    /// </summary>
+    public static bool AreEquivalent(string? left, string? right)
+    {
+        var leftNormalized = Normalize(left);
+        var rightNormalized = Normalize(right);
+
+        if (leftNormalized is not BarcodeNormalizationResult.Valid leftValid
+            || rightNormalized is not BarcodeNormalizationResult.Valid rightValid)
+        {
+            return false;
+        }
+
+        return string.Equals(
+            ToComparisonKey(leftValid.Barcode),
+            ToComparisonKey(rightValid.Barcode),
+            StringComparison.Ordinal);
+    }
+
+    private static string Clean(string rawInput)
+    {
+        // Strip control characters (scanner terminators like CR/LF/Tab that
+        // slipped through) and surrounding whitespace, then uppercase — the
+        // format is case-insensitive at the scanner but canonical uppercase
+        // everywhere downstream, matching the backend's own normalization.
+        var cleaned = new string(rawInput.Where(c => !char.IsControl(c)).ToArray())
+            .Trim()
+            .ToUpperInvariant();
+
+        // Some Code128 readers prepend AIM symbology identifiers such as
+        // ]C0 or ]C1. They are scanner metadata, not part of the GBEX code.
+        if (cleaned.Length >= 3 && cleaned[0] == ']' && cleaned[1] == 'C')
+        {
+            cleaned = cleaned[3..];
+        }
+
+        // Operators sometimes test with copied values containing spaces or
+        // dashes. Hardware scanner output remains unchanged, but accepting
+        // these harmless separators makes manual fallback safer.
+        return cleaned.Replace(" ", string.Empty).Replace("-", string.Empty);
+    }
+
+    private static string ToComparisonKey(string normalizedBarcode)
+    {
+        if (normalizedBarcode.StartsWith("GBEX", StringComparison.Ordinal))
+        {
+            return normalizedBarcode[4..];
+        }
+
+        if (normalizedBarcode.StartsWith("GBX", StringComparison.Ordinal))
+        {
+            return normalizedBarcode[3..];
+        }
+
+        if (normalizedBarcode.StartsWith("GB", StringComparison.Ordinal))
+        {
+            return normalizedBarcode[2..];
+        }
+
+        return normalizedBarcode;
     }
 }
 

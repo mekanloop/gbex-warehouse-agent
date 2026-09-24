@@ -14,6 +14,12 @@ public class BarcodeNormalizerTests
     [InlineData("GBX2508230001", "GBX2508230001")]
     [InlineData("gbx2508230001", "GBX2508230001")]
     [InlineData("  GBX2508230001  ", "GBX2508230001")]
+    [InlineData("GB260924000003", "GB260924000003")]
+    [InlineData("gb260924000003", "GB260924000003")]
+    [InlineData("260924000003", "260924000003")]
+    [InlineData("260924-000003", "260924000003")]
+    [InlineData("260 924 000 003", "260924000003")]
+    [InlineData("]C1260924000003\r\n", "260924000003")]
     public void Normalize_accepts_and_uppercases_valid_barcodes(string input, string expected)
     {
         var result = BarcodeNormalizer.Normalize(input);
@@ -42,10 +48,33 @@ public class BarcodeNormalizerTests
     [InlineData("GBEX25082300012")]
     [InlineData("GBX123")]
     [InlineData("GBX25082300012")]
+    [InlineData("GB123")]
+    [InlineData("GB2609240000031")]
+    [InlineData("2609240000031")]
     [InlineData("<script>alert(1)</script>")]
     public void Normalize_rejects_wrong_format(string input)
     {
         Assert.IsType<BarcodeNormalizationResult.InvalidFormat>(BarcodeNormalizer.Normalize(input));
+    }
+
+    [Theory]
+    [InlineData("GB260924000003", "260924000003")]
+    [InlineData("260924000003", "GB260924000003")]
+    [InlineData("GBEX2508230001", "2508230001")]
+    [InlineData("GBX2508230001", "2508230001")]
+    [InlineData("]C1GB260924000003", "260 924 000 003")]
+    public void AreEquivalent_matches_internal_and_printed_forms(string left, string right)
+    {
+        Assert.True(BarcodeNormalizer.AreEquivalent(left, right));
+    }
+
+    [Theory]
+    [InlineData("GB260924000003", "260924000004")]
+    [InlineData("GBEX2508230001", "GBEX2508230002")]
+    [InlineData("not-a-barcode", "260924000003")]
+    public void AreEquivalent_rejects_different_or_invalid_barcodes(string left, string right)
+    {
+        Assert.False(BarcodeNormalizer.AreEquivalent(left, right));
     }
 
     private sealed class FakeClock : IClock

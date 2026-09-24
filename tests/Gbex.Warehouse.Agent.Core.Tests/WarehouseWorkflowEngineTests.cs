@@ -308,6 +308,30 @@ public class WarehouseWorkflowEngineTests
     }
 
     [Fact]
+    public async Task HandleDeviceMeasurement_accepts_current_numeric_label_and_correlates_with_internal_gb_code()
+    {
+        var fx = new Fixture();
+        var currentOrder = Order() with { GbexBarcode = "GB260924000003" };
+        fx.GbexClient.Setup(c => c.LookupOrderAsync("260924000003", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(currentOrder));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-device-current", Result = MeasurementResultKind.Pass, RequiresEvidence = false }));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "260924000003" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        Assert.NotNull(result.Order);
+        Assert.Equal("GB260924000003", result.Order!.GbexBarcode);
+        var pass = Assert.IsType<MeasureOutcome.Pass>(result.Outcome);
+        Assert.Equal("m-device-current", pass.MeasurementId);
+        fx.GbexClient.Verify(c => c.SubmitMeasurementAsync(
+            It.Is<MeasurementSubmission>(s => s.Barcode == "GB260924000003"),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleDeviceMeasurement_rejects_a_second_push_reusing_the_same_package_number()
     {
         var fx = new Fixture();

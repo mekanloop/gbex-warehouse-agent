@@ -1,4 +1,5 @@
 using Gbex.Warehouse.Agent.Core.Abstractions;
+using Gbex.Warehouse.Agent.Core.Barcode;
 using Gbex.Warehouse.Agent.Core.Models;
 
 namespace Gbex.Warehouse.Agent.Core.Correlation;
@@ -54,7 +55,7 @@ public sealed class MeasurementCorrelationValidator
         }
 
         if (!string.IsNullOrWhiteSpace(measurement.DeviceReportedBarcode)
-            && !string.Equals(measurement.DeviceReportedBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase))
+            && !BarcodeNormalizer.AreEquivalent(scannedBarcode, measurement.DeviceReportedBarcode))
         {
             return new CorrelationResult.DeviceBarcodeMismatch(scannedBarcode, measurement.DeviceReportedBarcode);
         }

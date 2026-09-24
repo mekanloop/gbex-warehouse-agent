@@ -91,6 +91,18 @@ public class MeasurementCorrelationValidatorTests
     }
 
     [Fact]
+    public void Validate_accepts_current_label_when_device_reports_bare_numeric_code()
+    {
+        var clock = new FakeClock();
+        var validator = new MeasurementCorrelationValidator(clock, TimeSpan.FromSeconds(30));
+
+        var measurement = Measurement(clock.UtcNow, deviceBarcode: "260924000003");
+        var result = validator.Validate("GB260924000003", measurement);
+
+        Assert.IsType<CorrelationResult.Valid>(result);
+    }
+
+    [Fact]
     public void Validate_ignores_device_barcode_check_when_device_reported_none()
     {
         var clock = new FakeClock();
