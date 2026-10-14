@@ -35,21 +35,6 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
     private readonly ILogger<EasyCubeTcpListener> _logger;
     private readonly Random _random = new();
 
-    /// <summary>
-    /// The device's "I" (image) frame carries no package number, so it
-    /// cannot be matched to a specific MFR frame by content — only by
-    /// arrival order. Confirmed on real hardware (2026-08-27, ImgAutoSend
-    /// enabled) that it is pushed as its own separate frame. This holds the
-    /// most recently received image until the next measurement frame
-    /// consumes it, as long as that happens within ImageCorrelationWindow —
-    /// covers the (camera-finishes-before-sensor) ordering; if the image
-    /// instead arrives AFTER its measurement frame, this TCP path leaves
-    /// ImageBase64 null and WarehouseWorkflowEngine's HTTP /alibi fallback
-    /// (TryFetchEvidenceImageAsync) still covers evidence on mismatch.
-    /// </summary>
-    private static readonly TimeSpan ImageCorrelationWindow = TimeSpan.FromSeconds(3);
-    private (string Base64, DateTimeOffset ReceivedAt)? _pendingImage;
-
     public EasyCubeConnectionState State { get; private set; } = EasyCubeConnectionState.Disconnected;
     public event Action<EasyCubeConnectionState>? StateChanged;
     public event Func<CapturedMeasurement, CancellationToken, Task>? MeasurementReceived;
@@ -140,9 +125,17 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
     {
         var parsed = EasyCubeProtocolZeroParser.TryParse(frame);
 
-        if (parsed is EasyCubeFrameParseResult.ImageOk imageOk)
+        if (parsed is EasyCubeFrameParseResult.ImageOk)
         {
-            _pendingImage = (imageOk.Base64, DateTimeOffset.UtcNow);
+            // An EasyCube Protocol 0 "I" frame has no package number. It is
+            // therefore unsafe to associate it by timing with the next MFR
+            // frame: after scanning package A the camera image can arrive
+            // just before package B's MFR and make B display A's photo.
+            // Evidence is intentionally fetched later from a package-bound
+            // HTTP record (/last_cap_measure after its package check, then
+            // /alibi/{packageNumber}). Correct evidence is more important
+            // than showing an unverified TCP thumbnail.
+            _logger.LogDebug("Ignoring uncorrelated EasyCube TCP image frame; evidence is fetched by package number");
             return;
         }
 
@@ -152,13 +145,6 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
             _logger.LogWarning("Discarding malformed EasyCube TCP frame: {Detail}", detail);
             return;
         }
-
-        string? imageBase64 = null;
-        if (_pendingImage is (var pendingBase64, var receivedAt) && DateTimeOffset.UtcNow - receivedAt <= ImageCorrelationWindow)
-        {
-            imageBase64 = pendingBase64;
-        }
-        _pendingImage = null;
 
         var record = ok.Record;
 
@@ -202,7 +188,10 @@ public sealed class EasyCubeTcpListener : BackgroundService, IEasyCubeConnection
             HeightCm = heightOk.Value,
             DimensionalWeightKg = dimWeightKg,
             DeviceReportedBarcode = record.Barcode,
-            ImageBase64 = imageBase64,
+            // Never attach an uncorrelated TCP image frame to an MFR record.
+            // WarehouseWorkflowEngine obtains verified evidence by this
+            // record's PackageNumber if the backend requires a photo.
+            ImageBase64 = null,
         };
 
         var handler = MeasurementReceived;

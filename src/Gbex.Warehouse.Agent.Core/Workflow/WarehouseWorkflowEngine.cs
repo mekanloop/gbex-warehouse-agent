@@ -403,7 +403,10 @@ public sealed class WarehouseWorkflowEngine
         return await TryFetchFromAsync(
             $"/alibi/{packageNumber}",
             () => _easyCubeClient.GetByPackageNumberAsync(packageNumber, ct),
-            expectedPackageNumber: null, // /alibi already filters by package number server-side
+            // Do not trust the endpoint path alone. A device cache/firmware
+            // error must never attach another package's image just because
+            // it was requested through an /alibi/{packageNumber} URL.
+            expectedPackageNumber: packageNumber,
             ct);
     }
 

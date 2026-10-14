@@ -239,6 +239,44 @@ public class EasyCubeTcpIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Uncorrelated_image_frame_is_never_attached_to_the_next_package()
+    {
+        // Protocol 0 image frames do not include a package number. If an
+        // image belonging to package A arrives immediately before package B's
+        // MFR, timing-based matching would show A's photo under B. The agent
+        // must leave it null and fetch evidence later by B's package number.
+        var (_, listener) = BuildEngineAndListener();
+        var received = new TaskCompletionSource<CapturedMeasurement>();
+        listener.MeasurementReceived += (measurement, _) =>
+        {
+            received.TrySetResult(measurement);
+            return Task.CompletedTask;
+        };
+
+        using var cts = new CancellationTokenSource();
+        _ = listener.StartAsync(cts.Token);
+        try
+        {
+            await WaitForStateAsync(listener, EasyCubeConnectionState.Connected, TimeSpan.FromSeconds(5));
+
+            var mfr = "{MFR,DSN,00000000,P,9003,T," + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") +
+                ",L,40.0,LU,cm,W,30.0,WU,cm,H,20.0,HU,cm,WT,5.000,WTU,kg,B,GBEX2508230003}";
+            await _simulatorControlHttp.PostAsJsonAsync(
+                "/simulator/tcp-push-raw",
+                new TcpRawBody("{I,S,25,ID,aGVsbG8=}" + mfr));
+
+            var measurement = await received.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("9003", measurement.PackageNumber);
+            Assert.Null(measurement.ImageBase64);
+        }
+        finally
+        {
+            cts.Cancel();
+            await listener.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
     public async Task A_malformed_frame_is_discarded_without_breaking_the_next_real_measurement()
     {
         const string barcode = "GBEX2508230005";
