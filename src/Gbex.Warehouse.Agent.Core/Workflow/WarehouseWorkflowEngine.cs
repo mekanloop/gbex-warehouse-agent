@@ -174,7 +174,18 @@ public sealed class WarehouseWorkflowEngine
             return new DeviceMeasurementResult(null, new MeasureOutcome.LookupFailed(lookup));
         }
 
-        var outcome = await ValidateAndSubmitAsync(found.Order, measurement, ct);
+        // A current thermal label encodes the short G######## reference while
+        // the API intentionally returns the immutable internal GB###########
+        // barcode. The successful authenticated lookup is the proof that this
+        // exact device-reported reference belongs to this order; canonicalise
+        // it only after that proof, before the strict correlation check.
+        // This preserves the mismatch guard for unknown/wrong device values.
+        var canonicalMeasurement = measurement with
+        {
+            DeviceReportedBarcode = found.Order.GbexBarcode,
+        };
+
+        var outcome = await ValidateAndSubmitAsync(found.Order, canonicalMeasurement, ct);
         return new DeviceMeasurementResult(found.Order, outcome);
     }
 

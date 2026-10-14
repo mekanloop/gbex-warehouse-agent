@@ -16,6 +16,7 @@ public abstract record BarcodeNormalizationResult
 /// Order.fulfillmentMode (surfaced via StationOrderDto) is the sole source
 /// of truth for workflow logic. The agent must accept every label format the
 /// GBEX web app can print:
+///   - G+8 digits (current customer-facing reference printed on thermal labels)
 ///   - GBEX+10 digits and GBX+10 digits (legacy labels)
 ///   - GB+12 digits (current internal/customer-facing code)
 ///   - 12 bare digits (current printed/scanner code, e.g. 260924000003)
@@ -26,7 +27,7 @@ public abstract record BarcodeNormalizationResult
 public static class BarcodeNormalizer
 {
     private const int MaxReasonableLength = 64;
-    private static readonly Regex GbexBarcodePattern = new(@"^((GBEX|GBX)\d{10}|GB\d{12}|\d{12}|\d{10})$", RegexOptions.Compiled);
+    private static readonly Regex GbexBarcodePattern = new(@"^(G\d{8}|(GBEX|GBX)\d{10}|GB\d{12}|\d{12}|\d{10})$", RegexOptions.Compiled);
 
     public static BarcodeNormalizationResult Normalize(string? rawInput)
     {

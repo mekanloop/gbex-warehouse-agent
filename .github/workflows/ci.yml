@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 env:
-  PILOT_VERSION: "1.11.2"
+  PILOT_VERSION: "1.11.3"
 
 jobs:
   build-test-publish:
@@ -99,6 +99,7 @@ jobs:
           GBEX Depo Ajanı $env:PILOT_VERSION
 
           - Güncel müşteri etiketlerindeki yalnızca rakamdan oluşan barkodları kabul eder.
+          - Güncel termal etiketlerdeki G12345678 referans barkodlarını kabul eder ve güvenli şekilde ilgili iç siparişe bağlar.
           - GB/GBEX/GBX eski etiketleriyle geriye uyumludur.
           - EasyCube'un okuduğu 260924000003 gibi barkodlar, sunucudaki GB260924000003 siparişleriyle güvenli şekilde eşleştirilir.
           "@

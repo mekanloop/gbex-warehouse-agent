@@ -332,6 +332,29 @@ public class WarehouseWorkflowEngineTests
     }
 
     [Fact]
+    public async Task HandleDeviceMeasurement_accepts_current_short_reference_and_submits_the_canonical_internal_barcode()
+    {
+        var fx = new Fixture();
+        var currentOrder = Order() with { GbexBarcode = "GB261014000002" };
+        fx.GbexClient.Setup(c => c.LookupOrderAsync("G63342047", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(OrderLookupOutcome.Ok(currentOrder));
+        fx.GbexClient.Setup(c => c.SubmitMeasurementAsync(It.IsAny<MeasurementSubmission>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MeasurementSubmitOutcome.Ok(new MeasurementSubmissionResult { MeasurementId = "m-device-reference", Result = MeasurementResultKind.Pass, RequiresEvidence = false }));
+
+        var engine = fx.BuildEngine();
+        var measurement = Measurement() with { DeviceReportedBarcode = "G63342047" };
+        var result = await engine.HandleDeviceMeasurementAsync(measurement, CancellationToken.None);
+
+        Assert.NotNull(result.Order);
+        Assert.Equal("GB261014000002", result.Order!.GbexBarcode);
+        Assert.IsType<MeasureOutcome.Pass>(result.Outcome);
+        fx.GbexClient.Verify(c => c.SubmitMeasurementAsync(
+            It.Is<MeasurementSubmission>(s => s.Barcode == "GB261014000002"),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleDeviceMeasurement_accepts_current_numeric_label_for_manual_carrier_orders()
     {
         var fx = new Fixture();

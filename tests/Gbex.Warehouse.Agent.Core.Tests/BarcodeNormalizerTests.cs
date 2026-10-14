@@ -20,6 +20,8 @@ public class BarcodeNormalizerTests
     [InlineData("260924-000003", "260924000003")]
     [InlineData("260 924 000 003", "260924000003")]
     [InlineData("]C1260924000003\r\n", "260924000003")]
+    [InlineData("G41653611", "G41653611")]
+    [InlineData("  g41653611  ", "G41653611")]
     public void Normalize_accepts_and_uppercases_valid_barcodes(string input, string expected)
     {
         var result = BarcodeNormalizer.Normalize(input);
